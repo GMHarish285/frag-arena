@@ -1,30 +1,14 @@
-import { navigateTo, context, requestExpandedMode } from '@devvit/web/client';
+// Active frontend companion for splash.html
+document.addEventListener('DOMContentLoaded', () => {
+    const playButton = document.getElementById('play-button');
 
-const docsLink = document.getElementById('docs-link') as HTMLDivElement;
-const playtestLink = document.getElementById('playtest-link') as HTMLDivElement;
-const discordLink = document.getElementById('discord-link') as HTMLDivElement;
-const startButton = document.getElementById('start-button') as HTMLButtonElement;
-
-startButton.addEventListener('click', (e) => {
-  requestExpandedMode(e, 'game');
+    if (playButton) {
+        playButton.addEventListener('click', () => {
+            // Tell the parent Devvit shell to expand the view window and mount game.html
+            window.parent.postMessage({
+                type: 'LAUNCH_GAME',
+                target: 'game.html'
+            }, '*');
+        });
+    }
 });
-
-docsLink.addEventListener('click', () => {
-  navigateTo('https://developers.reddit.com/docs');
-});
-
-playtestLink.addEventListener('click', () => {
-  navigateTo('https://www.reddit.com/r/Devvit');
-});
-
-discordLink.addEventListener('click', () => {
-  navigateTo('https://discord.com/invite/R7yu2wh9Qz');
-});
-
-const titleElement = document.getElementById('title') as HTMLHeadingElement;
-
-function init() {
-  titleElement.textContent = `Hey ${context.username ?? 'user'} 👋`;
-}
-
-init();

@@ -1,17 +1,104 @@
-body {
-  margin: 0;
-  padding: 0;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #0f0f0f;
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
 }
 
-#app {
-  width: 100%;
-  height: 100vh;
-  overflow: hidden;
+html, body {
+    width: 100%;
+    height: 100%;
+    background-color: #1a1a1b;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    font-family: sans-serif;
 }
 
-#game-container {
-  width: 100%;
-  height: 100%;
+#phaser-app {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+canvas {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+}
+
+/* --- FLOATING DEV TEST PANEL STYLES --- */
+#io-orientation-blocker {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #1a1a1b;
+    z-index: 9999;
+    justify-content: center;
+    align-items: center;
+    color: #ffffff;
+    text-align: center;
+}
+
+@media (orientation: portrait) {
+    #orientation-blocker { display: flex; }
+    #phaser-app { display: none; }
+}
+
+#transaction-badge-block { max-width: 280px; }
+
+#unlocked-indicator {
+    font-size: 48px;
+    margin-bottom: 15px;
+}
+
+/* --- THE NEW WEAPON DROPDOWN LAYERS --- */
+#orientation-blocker h2 { color: #ff4500; margin-bottom: 10px; }
+#orientation-blocker p { color: #818384; font-size: 0.9rem; }
+
+#dev-sandbox-panel {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background-color: rgba(26, 26, 27, 0.85); /* Semitransparent Reddit Dark background */
+    border: 2px solid #ff4500;
+    padding: 8px 14px;
+    border-radius: 8px;
+    z-index: 100; /* Layers directly above the canvas scene view */
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+}
+
+#dev-sandbox-panel label {
+    color: #ff4500;
+    font-size: 0.85rem;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+#dev-sandbox-panel select {
+    background-color: #272729;
+    color: #ffffff;
+    border: 1px solid #343536;
+    padding: 6px 10px;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    cursor: pointer;
+    outline: none;
+}
+
+#dev-sandbox-panel select:focus {
+    border-color: #ff4500;
 }
