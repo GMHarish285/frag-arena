@@ -9,11 +9,14 @@ export class Player {
     public readonly MAX_JUMPS: number = 2;
     public facingDirection: 'LEFT' | 'RIGHT' = 'RIGHT';
 
+    // NEW COMBAT STATES
+    public isBlocking: boolean = false;
+    public isInvisible: boolean = false;
+
     constructor(scene: Phaser.Scene, x: number, y: number, id: string, teamId: string, color: number) {
         this.id = id;
         this.teamId = teamId;
 
-        // Dynamically generate a distinct colored texture for this player
         const texKey = `player_tex_${color}`;
         if (!scene.textures.exists(texKey)) {
             const g = scene.add.graphics();
@@ -26,14 +29,22 @@ export class Player {
         this.sprite = scene.physics.add.sprite(x, y, texKey);
         this.sprite.setCollideWorldBounds(false);
         this.sprite.setDrag(2000, 0);
-
-        // Map this class instance into the sprite data so colliders can access it!
         this.sprite.setData('entity', this);
     }
 
     public applyKnockback(kbX: number, kbY: number) {
-        // Add impact velocity on top of whatever movement they are currently doing
+        // If blocking, reduce physical knockback by 80%
+        if (this.isBlocking) {
+            kbX *= 0.2;
+            kbY *= 0.2;
+        }
         this.sprite.setVelocity(this.sprite.body.velocity.x + kbX, this.sprite.body.velocity.y + kbY);
+    }
+
+    public toggleInvisibility() {
+        this.isInvisible = !this.isInvisible;
+        // 0.2 alpha so the owner can still vaguely see themselves, but enemies struggle
+        this.sprite.setAlpha(this.isInvisible ? 0.2 : 1);
     }
 
     public update(keys?: any) {
@@ -41,7 +52,6 @@ export class Player {
         if (isGrounded) this.jumpCount = 0;
         else if (this.jumpCount === 0) this.jumpCount = 1;
 
-        // Only apply movement if input keys were provided (Dummy ignores this)
         if (keys) {
             const moveSpeed = 500; 
             if (keys.A.isDown) {
@@ -51,7 +61,6 @@ export class Player {
                 this.sprite.setVelocityX(moveSpeed);
                 this.facingDirection = 'RIGHT';
             } else {
-                // Friction lock: only halt if they aren't actively being knocked back!
                 if (Math.abs(this.sprite.body.velocity.x) <= moveSpeed) {
                     this.sprite.setVelocityX(0);
                 }
@@ -63,16 +72,17 @@ export class Player {
             }
         }
 
-        // Global Boundary Death Logic handles itself per-player automatically!
         const padding = 150;
         if (this.sprite.y > 1080 + padding || this.sprite.x < -padding || this.sprite.x > 1920 + padding) {
-            this.respawn(960, 200); // Drop back in the center
+            this.respawn(960, 200);
         }
     }
 
     public respawn(x: number, y: number) {
         this.sprite.setVelocity(0, 0);
         this.sprite.setPosition(x, y);
-        this.jumpCount = 1; // Count the air-drop
+        this.jumpCount = 1;
+        this.isBlocking = false;
+        if (this.isInvisible) this.toggleInvisibility();
     }
 }
