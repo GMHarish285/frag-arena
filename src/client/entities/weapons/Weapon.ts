@@ -1,7 +1,6 @@
 import { Player } from '../Player';
 
 export interface IArena {
-  // Added velocityY for angled shots and spreads
   spawnProjectile(
     x: number,
     y: number,
@@ -11,7 +10,8 @@ export interface IArena {
     hasGravity: boolean,
     shooter: Player,
     kbX: number,
-    kbY: number
+    kbY: number,
+    damage: number
   ): void;
   spawnBomb(
     x: number,
@@ -21,7 +21,8 @@ export interface IArena {
     isSolid: boolean,
     shooter: Player,
     kbX: number,
-    kbY: number
+    kbY: number,
+    damage: number
   ): void;
   spawnMeleeSlash(
     x: number,
@@ -29,10 +30,9 @@ export interface IArena {
     facing: 'LEFT' | 'RIGHT',
     shooter: Player,
     kbX: number,
-    kbY: number
+    kbY: number,
+    damage: number
   ): void;
-
-  // NEW: Rockets have homing attributes and are tagged as explosive
   spawnRocket(
     x: number,
     y: number,
@@ -41,7 +41,8 @@ export interface IArena {
     shooter: Player,
     kbX: number,
     kbY: number,
-    homingStrength: number
+    homingStrength: number,
+    damage: number
   ): void;
 
   updateAmmoUI(text: string): void;
@@ -80,7 +81,6 @@ export abstract class Weapon {
   abstract onSecondary(shooter: Player): void;
 
   public primaryAttack(shooter: Player) {
-    // Added strict this.currentAmmo <= 0 safety constraint
     if (
       this.isReloading ||
       this.currentAmmo <= 0 ||
@@ -92,7 +92,6 @@ export abstract class Weapon {
   }
 
   public secondaryAttack(shooter: Player) {
-    // Added strict this.currentAmmo <= 0 safety constraint
     if (
       this.isReloading ||
       this.currentAmmo <= 0 ||

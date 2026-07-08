@@ -1,54 +1,32 @@
-import Phaser from 'phaser'; 
+import Phaser from 'phaser';
 import { Weapon, IArena } from './Weapon';
 import { Player } from '../Player';
 
 export class Uzi extends Weapon {
-  constructor(scene: IArena) {
-    // Primary Cooldown: 60ms | Secondary Cooldown: 60ms (Fast spray!)
-    super(scene, 'UZI', 40, 60, 60);
-  }
+    constructor(scene: IArena) { 
+        super(scene, 'UZI', 40, 60, 60); 
+    }
 
-  override onPrimary(shooter: Player) {
-    // Strict guard: If reloading or out of ammo, do absolutely nothing
-    if (this.isReloading || this.currentAmmo <= 0) return;
+    override onPrimary(shooter: Player) {
+        if (this.isReloading || this.currentAmmo <= 0) return;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? 1200 : -1200;
 
-    this.scene.spawnProjectile(
-      shooter.sprite.x,
-      shooter.sprite.y + 10,
-      shooter.facingDirection === 'RIGHT' ? 1200 : -1200,
-      0, // Straight shot
-      'bullet_tex',
-      false,
-      shooter,
-      80,
-      -20
-    );
+        // Straight-shot spray doing 7 damage per bullet
+        this.scene.spawnProjectile(playerSprite.x, playerSprite.y + 10, dirX, 0, 'bullet_tex', false, shooter, 80, -20, 7);
+        this.applyHorizontalRecoil(shooter, 40); 
+        this.consumeAmmo(1);
+    }
 
-    this.applyHorizontalRecoil(shooter, 40);
-    this.consumeAmmo(1);
-  }
-
-  override onSecondary(shooter: Player) {
-    // Strict guard: Stop execution immediately if clip is empty or reloading
-    if (this.isReloading || this.currentAmmo <= 0) return;
-
-    const dir = shooter.facingDirection === 'RIGHT' ? 1 : -1;
-    // Generate a random vertical angle for the wild spray cone
-    const randomVy = Phaser.Math.Between(-300, 300);
-
-    this.scene.spawnProjectile(
-      shooter.sprite.x,
-      shooter.sprite.y + 10,
-      1000 * dir,
-      randomVy, // Dynamic angled shot
-      'bullet_tex',
-      false,
-      shooter,
-      100,
-      -40
-    );
-
-    this.applyHorizontalRecoil(shooter, 50);
-    this.consumeAmmo(1);
-  }
+    override onSecondary(shooter: Player) {
+        if (this.isReloading || this.currentAmmo <= 0) return;
+        const playerSprite = shooter.sprite;
+        const dir = shooter.facingDirection === 'RIGHT' ? 1 : -1;
+        const randomVy = Phaser.Math.Between(-300, 300);
+        
+        // Wild angled cone projectiles doing 9 damage per bullet
+        this.scene.spawnProjectile(playerSprite.x, playerSprite.y + 10, 1000 * dir, randomVy, 'bullet_tex', false, shooter, 100, -40, 9);
+        this.applyHorizontalRecoil(shooter, 50); 
+        this.consumeAmmo(1);
+    }
 }

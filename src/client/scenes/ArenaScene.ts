@@ -14,18 +14,18 @@ import { Uzi } from '../entities/weapons/Uzi';
 
 export class ArenaScene extends Phaser.Scene implements IArena {
   private player1!: Player;
-  public dummy!: Player; // Public so rockets can find it easily
+  public dummy!: Player;
   private playersGroup!: Phaser.Physics.Arcade.Group;
 
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private projectiles!: Phaser.Physics.Arcade.Group;
   private rockets!: Phaser.Physics.Arcade.Group;
   private solidBombs!: Phaser.Physics.Arcade.Group;
-  private ghostBombs!: Phaser.Physics.Arcade.Group;
   private meleeSlashes!: Phaser.Physics.Arcade.Group;
 
   private keys!: any;
   private ammoText!: Phaser.GameObjects.Text;
+  private scoreText!: Phaser.GameObjects.Text; // Secondary scoreboard element
 
   private weapons: Weapon[] = [];
   private currentWeaponIndex: number = 0;
@@ -41,8 +41,28 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.createPlatform(1470, 600, 500, 40, 0x888888);
 
     this.playersGroup = this.physics.add.group();
-    this.player1 = new Player(this, 960, 200, 'p1', 'team_A', 0xff4500);
-    this.dummy = new Player(this, 1200, 200, 'dummy', 'team_B', 0x0088ff);
+
+    // EASY BALANCE DEFAULTS: Configured to 100 Health and 10 Lives
+    this.player1 = new Player(
+      this,
+      960,
+      200,
+      'p1',
+      'team_A',
+      0xff4500,
+      100,
+      10
+    );
+    this.dummy = new Player(
+      this,
+      1200,
+      200,
+      'dummy',
+      'team_B',
+      0x0088ff,
+      100,
+      10
+    );
 
     this.playersGroup.add(this.player1.sprite);
     this.playersGroup.add(this.dummy.sprite);
@@ -57,10 +77,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.projectiles = this.physics.add.group();
     this.rockets = this.physics.add.group();
     this.solidBombs = this.physics.add.group();
-    this.ghostBombs = this.physics.add.group();
     this.meleeSlashes = this.physics.add.group();
 
-    // Environment Collisions
     this.physics.add.collider(
       this.playersGroup,
       this.platforms,
@@ -68,21 +86,16 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       this.oneWayCallback,
       this
     );
-
-    // FIX: Remove generic collider and use a conditional process callback!
-    // This ensures ONLY primary bombs collide, while rockets and thrown objects fall through seamlessly
     this.physics.add.collider(
       this.solidBombs,
       this.platforms,
-      undefined,
-      (bomb, platform) => {
-        const isGhostType = bomb.getData('isGhostBomb');
-        return !isGhostType; // If it's a secondary ghost bomb, return false to ignore collision
-      },
+      undefined,(bomb: any) => {
+            return !bomb.getData('isGhostBomb');
+        },
       this
     );
 
-    // Overlaps
+    // Overlaps tracking and routing
     this.physics.add.overlap(this.playersGroup, this.projectiles, (p, proj) =>
       this.handleHit(p, proj)
     );
@@ -90,9 +103,6 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       this.handleHit(p, r, true)
     );
     this.physics.add.overlap(this.playersGroup, this.solidBombs, (p, bomb) =>
-      this.handleHit(p, bomb)
-    );
-    this.physics.add.overlap(this.playersGroup, this.ghostBombs, (p, bomb) =>
       this.handleHit(p, bomb)
     );
     this.physics.add.overlap(this.playersGroup, this.meleeSlashes, (p, slash) =>
@@ -103,6 +113,13 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       fontSize: '32px',
       color: '#ffffff',
       fontStyle: 'bold',
+    });
+
+    // Displays current stocks and current damage parameters dynamically
+    this.scoreText = this.add.text(50, 100, '', {
+      fontSize: '24px',
+      color: '#818384',
+      fontFamily: 'sans-serif',
     });
 
     this.weapons = [
@@ -132,35 +149,33 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     if (player.id === shooterId || player.teamId === hazard.getData('teamId'))
       return;
 
-    // DIRECTIONAL BLOCKING LOGIC
-    const isExplosive = hazard.getData('isExplosive');
-    if (player.isBlocking && !isExplosive) {
+    if (player.isBlocking && !hazard.getData('isExplosive')) {
       const attackFromRight = hazard.x > player.sprite.x;
       if (
         (attackFromRight && player.facingDirection === 'RIGHT') ||
         (!attackFromRight && player.facingDirection === 'LEFT')
       ) {
         if (destroyHazard) hazard.destroy();
-        return; // Attack completely deflected!
+        return;
       }
     }
 
+    // Apply health pool impact
+    player.takeDamage(hazard.getData('damage'));
     player.applyKnockback(hazard.getData('kbX'), hazard.getData('kbY'));
 
     if (destroyHazard) {
-      if (isExplosive) this.detonateExplosive(hazard);
+      if (hazard.getData('isExplosive')) this.detonateExplosive(hazard);
       else hazard.destroy();
     }
   }
 
   private detonateExplosive(entity: any) {
     if (!entity.active) return;
-    // Simple visual flare for explosions
-    this.spawnMeleeSlash(entity.x, entity.y, 'RIGHT', this.player1, 0, 0);
+    this.spawnMeleeSlash(entity.x, entity.y, 'RIGHT', this.player1, 0, 0, 0);
     entity.destroy();
   }
 
-  // --- IArena Hooks ---
   getTime() {
     return this.time.now;
   }
@@ -171,6 +186,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.ammoText.setText(text);
   }
 
+  // --- SPANWERS RECEIVING DATA PACKETS ---
   spawnProjectile(
     x: number,
     y: number,
@@ -180,7 +196,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     hasGravity: boolean,
     shooter: Player,
     kbX: number,
-    kbY: number
+    kbY: number,
+    damage: number
   ) {
     const proj = this.projectiles.create(
       x,
@@ -194,6 +211,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     proj.setData('teamId', shooter.teamId);
     proj.setData('kbX', shooter.facingDirection === 'RIGHT' ? kbX : -kbX);
     proj.setData('kbY', kbY);
+    proj.setData('damage', damage);
     proj.setData('isExplosive', false);
   }
 
@@ -205,7 +223,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     shooter: Player,
     kbX: number,
     kbY: number,
-    homingStrength: number
+    homingStrength: number,
+    damage: number
   ) {
     const r = this.rockets.create(
       x,
@@ -219,10 +238,10 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     r.setData('teamId', shooter.teamId);
     r.setData('kbX', shooter.facingDirection === 'RIGHT' ? kbX : -kbX);
     r.setData('kbY', kbY);
+    r.setData('damage', damage);
     r.setData('isExplosive', true);
     r.setData('homingStrength', homingStrength);
 
-    // Auto-burst if it flies too long
     this.time.delayedCall(2500, () => {
       this.detonateExplosive(r);
     });
@@ -236,12 +255,15 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     isSolid: boolean,
     shooter: Player,
     kbX: number,
-    kbY: number
+    kbY: number,
+    damage: number
   ) {
-    const group = isSolid ? this.solidBombs : this.ghostBombs;
-    const bomb = group.create(x, y, 'bomb_tex') as Phaser.Physics.Arcade.Sprite;
-    if (!isSolid) (bomb.body as any).allowGravity = true;
-
+    const bomb = this.solidBombs.create(
+      x,
+      y,
+      'bomb_tex'
+    ) as Phaser.Physics.Arcade.Sprite;
+    (bomb.body as any).allowGravity = true;
     bomb.setBounce(0.5);
     bomb.setDrag(100, 0);
     bomb.setVelocity(velocityX, velocityY);
@@ -250,10 +272,12 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     bomb.setData('teamId', shooter.teamId);
     bomb.setData('kbX', shooter.facingDirection === 'RIGHT' ? kbX : -kbX);
     bomb.setData('kbY', kbY);
+    bomb.setData('damage', damage);
     bomb.setData('isExplosive', true);
+    bomb.setData('isGhostBomb', !isSolid);
 
     this.time.delayedCall(2000, () => {
-      this.detonateExplosive(bomb);
+      if (bomb.active) this.detonateExplosive(bomb);
     });
   }
 
@@ -263,7 +287,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     facing: 'LEFT' | 'RIGHT',
     shooter: Player,
     kbX: number,
-    kbY: number
+    kbY: number,
+    damage: number
   ) {
     const offset = facing === 'RIGHT' ? 50 : -50;
     const slash = this.meleeSlashes.create(
@@ -278,6 +303,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     slash.setData('teamId', shooter.teamId);
     slash.setData('kbX', facing === 'RIGHT' ? kbX : -kbX);
     slash.setData('kbY', kbY);
+    slash.setData('damage', damage);
     slash.setData('isExplosive', false);
 
     this.tweens.add({
@@ -292,7 +318,12 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.player1.update(this.keys);
     this.dummy.update();
 
-    // Weapon Mapping (Added 5, 6, 7, 8, 9, 0)
+    // Update score HUD dynamically
+    this.scoreText.setText(
+      `P1: HP ${this.player1.health} | Stocks: ${this.player1.lives}\n` +
+        `DUMMY: HP ${this.dummy.health} | Stocks: ${this.dummy.lives}`
+    );
+
     if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) this.equipWeapon(0);
     if (Phaser.Input.Keyboard.JustDown(this.keys.TWO)) this.equipWeapon(1);
     if (Phaser.Input.Keyboard.JustDown(this.keys.THREE)) this.equipWeapon(2);
@@ -310,33 +341,25 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       if (this.keys.Y.isDown) currentWeapon.secondaryAttack(this.player1);
     }
 
-    // HOMING MISSILE TRACKING
     this.rockets.getChildren().forEach((r) => {
       const rocket = r as Phaser.Physics.Arcade.Sprite;
       if (!rocket.active) return;
-
-      // Assert that the body is an active Arcade Physics body
       const body = rocket.body as Phaser.Physics.Arcade.Body;
-      if (!body) return; // Defensive safe-guard check
-
+      if (!body) return;
       const homing = rocket.getData('homingStrength');
-      if (homing > 0) {
-        // Steer towards dummy player
+      if (homing > 0 && this.dummy.sprite.active) {
         const idealAngle = Phaser.Math.Angle.Between(
           rocket.x,
           rocket.y,
           this.dummy.sprite.x,
           this.dummy.sprite.y
         );
-
-        // FIXED: Using our safely typed body variable instead of rocket.body
         const currentAngle = Math.atan2(body.velocity.y, body.velocity.x);
         const newAngle = Phaser.Math.Angle.RotateTo(
           currentAngle,
           idealAngle,
           homing
         );
-
         const speed = 700;
         rocket.setVelocity(
           Math.cos(newAngle) * speed,
@@ -346,7 +369,6 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       }
     });
 
-    // Cleanup offscreen bullets
     this.projectiles.getChildren().forEach((b) => {
       const bullet = b as Phaser.Physics.Arcade.Sprite;
       if (bullet.active && (bullet.x < -200 || bullet.x > 2120))
@@ -368,12 +390,10 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       'weapon-selector'
     ) as HTMLSelectElement | null;
     if (dropdown) {
-      // Re-populate dropdown with all 10 weapons dynamically
       dropdown.innerHTML = this.weapons
         .map((w, i) => `<option value="${i}">${w.name}</option>`)
         .join('');
       dropdown.value = String(this.currentWeaponIndex);
-
       dropdown.addEventListener('change', (e) => {
         const target = e.target as HTMLSelectElement;
         const index = parseInt(target.value, 10);
