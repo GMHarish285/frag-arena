@@ -12,6 +12,9 @@ import { MachineGun } from '../entities/weapons/MachineGun';
 import { RocketLauncher } from '../entities/weapons/RocketLauncher';
 import { Uzi } from '../entities/weapons/Uzi';
 
+// Import decoupled map components
+import { MAP_REGISTRY, IMapData } from '../maps/MapConfig';
+
 export class ArenaScene extends Phaser.Scene implements IArena {
   private player1!: Player;
   public dummy!: Player;
@@ -25,28 +28,37 @@ export class ArenaScene extends Phaser.Scene implements IArena {
 
   private keys!: any;
   private ammoText!: Phaser.GameObjects.Text;
-  private scoreText!: Phaser.GameObjects.Text; // Secondary scoreboard element
+  private scoreText!: Phaser.GameObjects.Text;
 
   private weapons: Weapon[] = [];
   private currentWeaponIndex: number = 0;
+
+  // Track map selection states
+  private activeMapConfig!: IMapData;
+  private currentMapId: string = 0 && 'verticalChasm' || 1 && 'classic';
 
   constructor() {
     super({ key: 'ArenaScene' });
   }
 
   create() {
+    // 1. Core Physics Systems Setup
     this.platforms = this.physics.add.staticGroup();
-    this.createPlatform(960, 800, 800, 40, 0x888888);
-    this.createPlatform(450, 600, 500, 40, 0x888888);
-    this.createPlatform(1470, 600, 500, 40, 0x888888);
-
     this.playersGroup = this.physics.add.group();
+    this.projectiles = this.physics.add.group();
+    this.rockets = this.physics.add.group();
+    this.solidBombs = this.physics.add.group();
+    this.meleeSlashes = this.physics.add.group();
 
-    // EASY BALANCE DEFAULTS: Configured to 100 Health and 10 Lives
+    // 2. Load Selected Map Layout
+    this.buildMap(this.currentMapId);
+
+    // 3. Spawners Using Map-Specific Anchors
+    const spawnPoints = this.activeMapConfig.spawnPoints;
     this.player1 = new Player(
       this,
-      960,
-      200,
+      spawnPoints.player1.x,
+      spawnPoints.player1.y,
       'p1',
       'team_A',
       0xff4500,
@@ -55,8 +67,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     );
     this.dummy = new Player(
       this,
-      1200,
-      200,
+      spawnPoints.dummy.x,
+      spawnPoints.dummy.y,
       'dummy',
       'team_B',
       0x0088ff,
@@ -67,6 +79,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.playersGroup.add(this.player1.sprite);
     this.playersGroup.add(this.dummy.sprite);
 
+    // 4. Asset Generation
     this.generateTexture('bullet_tex', 20, 8, 0xffd700);
     this.generateTexture('pistol_thrown_tex', 30, 20, 0x555555);
     this.generateTexture('knife_tex', 40, 10, 0xcccccc);
@@ -74,11 +87,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.generateTexture('rocket_tex', 40, 15, 0xff8800);
     this.generateTexture('slash_tex', 60, 60, 0xffffff);
 
-    this.projectiles = this.physics.add.group();
-    this.rockets = this.physics.add.group();
-    this.solidBombs = this.physics.add.group();
-    this.meleeSlashes = this.physics.add.group();
-
+    // 5. Physics Overlaps & Colliders Rules
     this.physics.add.collider(
       this.playersGroup,
       this.platforms,
@@ -89,13 +98,11 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.physics.add.collider(
       this.solidBombs,
       this.platforms,
-      undefined,(bomb: any) => {
-            return !bomb.getData('isGhostBomb');
-        },
+      undefined,
+      (bomb: any) => !bomb.getData('isGhostBomb'),
       this
     );
 
-    // Overlaps tracking and routing
     this.physics.add.overlap(this.playersGroup, this.projectiles, (p, proj) =>
       this.handleHit(p, proj)
     );
@@ -109,19 +116,19 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       this.handleHit(p, slash, false)
     );
 
+    // 6. UI Text Layouts
     this.ammoText = this.add.text(50, 50, '', {
       fontSize: '32px',
       color: '#ffffff',
       fontStyle: 'bold',
     });
-
-    // Displays current stocks and current damage parameters dynamically
     this.scoreText = this.add.text(50, 100, '', {
       fontSize: '24px',
       color: '#818384',
       fontFamily: 'sans-serif',
     });
 
+    // 7. Initialize Arsenal Setup
     this.weapons = [
       new Pistol(this),
       new SMG(this),
@@ -136,10 +143,46 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     ];
     this.equipWeapon(0);
 
+    // 8. Capture Inputs
     this.keys = this.input.keyboard!.addKeys(
       'W,A,S,D,T,Y,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE,ZERO'
     ) as any;
+
     this.setupDropdown();
+    this.setupMapDropdown(); // Optional: Hook custom DOM switcher for maps
+  }
+
+  /**
+   * Cleans past platform entities and dynamically spawns geometry for a target map asset
+   */
+  public buildMap(mapId: string) {
+    const config = MAP_REGISTRY[mapId];
+    if (!config) return;
+
+    this.currentMapId = mapId;
+    this.activeMapConfig = config;
+
+    // Clear structural assets if they exist from prior generation runs
+    this.platforms.clear(true, true);
+
+    // Iterate through map platforms registry
+    config.platforms.forEach((plat) => {
+      this.createPlatform(plat.x, plat.y, plat.width, plat.height, plat.color);
+    });
+
+    // If game entities have already been created, teleport them to the new starting locations
+    if (this.player1 && this.dummy) {
+      this.player1.sprite.setPosition(
+        config.spawnPoints.player1.x,
+        config.spawnPoints.player1.y
+      );
+      this.player1.sprite.setVelocity(0, 0);
+      this.dummy.sprite.setPosition(
+        config.spawnPoints.dummy.x,
+        config.spawnPoints.dummy.y
+      );
+      this.dummy.sprite.setVelocity(0, 0);
+    }
   }
 
   private handleHit(pSprite: any, hazard: any, destroyHazard: boolean = true) {
@@ -160,7 +203,6 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       }
     }
 
-    // Apply health pool impact
     player.takeDamage(hazard.getData('damage'));
     player.applyKnockback(hazard.getData('kbX'), hazard.getData('kbY'));
 
@@ -186,7 +228,6 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.ammoText.setText(text);
   }
 
-  // --- SPANWERS RECEIVING DATA PACKETS ---
   spawnProjectile(
     x: number,
     y: number,
@@ -206,7 +247,6 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     ) as Phaser.Physics.Arcade.Sprite;
     (proj.body as any).allowGravity = hasGravity;
     proj.setVelocity(velocityX, velocityY);
-
     proj.setData('shooterId', shooter.id);
     proj.setData('teamId', shooter.teamId);
     proj.setData('kbX', shooter.facingDirection === 'RIGHT' ? kbX : -kbX);
@@ -233,7 +273,6 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     ) as Phaser.Physics.Arcade.Sprite;
     (r.body as any).allowGravity = false;
     r.setVelocity(velocityX, velocityY);
-
     r.setData('shooterId', shooter.id);
     r.setData('teamId', shooter.teamId);
     r.setData('kbX', shooter.facingDirection === 'RIGHT' ? kbX : -kbX);
@@ -242,9 +281,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     r.setData('isExplosive', true);
     r.setData('homingStrength', homingStrength);
 
-    this.time.delayedCall(2500, () => {
-      this.detonateExplosive(r);
-    });
+    this.time.delayedCall(2500, () => this.detonateExplosive(r));
   }
 
   spawnBomb(
@@ -267,7 +304,6 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     bomb.setBounce(0.5);
     bomb.setDrag(100, 0);
     bomb.setVelocity(velocityX, velocityY);
-
     bomb.setData('shooterId', shooter.id);
     bomb.setData('teamId', shooter.teamId);
     bomb.setData('kbX', shooter.facingDirection === 'RIGHT' ? kbX : -kbX);
@@ -298,7 +334,6 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     ) as Phaser.Physics.Arcade.Sprite;
     (slash.body as any).allowGravity = false;
     slash.setAlpha(0.8);
-
     slash.setData('shooterId', shooter.id);
     slash.setData('teamId', shooter.teamId);
     slash.setData('kbX', facing === 'RIGHT' ? kbX : -kbX);
@@ -318,12 +353,27 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.player1.update(this.keys);
     this.dummy.update();
 
-    // Update score HUD dynamically
+    // Boundary Fall-Check utilizing individual dynamic map metadata
+    if (this.player1.sprite.y > this.activeMapConfig.deathY) {
+      this.handleOutOfBoundsRespawn(
+        this.player1,
+        this.activeMapConfig.spawnPoints.player1
+      );
+    }
+    if (this.dummy.sprite.y > this.activeMapConfig.deathY) {
+      this.handleOutOfBoundsRespawn(
+        this.dummy,
+        this.activeMapConfig.spawnPoints.dummy
+      );
+    }
+
     this.scoreText.setText(
-      `P1: HP ${this.player1.health} | Stocks: ${this.player1.lives}\n` +
+      `Map: ${this.activeMapConfig.name}\n` +
+        `P1: HP ${this.player1.health} | Stocks: ${this.player1.lives}\n` +
         `DUMMY: HP ${this.dummy.health} | Stocks: ${this.dummy.lives}`
     );
 
+    // Weapon Key Listeners mapping...
     if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) this.equipWeapon(0);
     if (Phaser.Input.Keyboard.JustDown(this.keys.TWO)) this.equipWeapon(1);
     if (Phaser.Input.Keyboard.JustDown(this.keys.THREE)) this.equipWeapon(2);
@@ -376,6 +426,20 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     });
   }
 
+  private handleOutOfBoundsRespawn(
+    player: Player,
+    spawnLoc: { x: number; y: number }
+  ) {
+    player.sprite.setPosition(spawnLoc.x, spawnLoc.y);
+    player.sprite.setVelocity(0, 0);
+    // Execute default stock deduction logic here if defined inside Player class
+    if (typeof (player as any).handleRespawn === 'function') {
+      (player as any).handleRespawn();
+    } else {
+      player.takeDamage(0); // Safely trigger standard state reset fallback
+    }
+  }
+
   private equipWeapon(index: number) {
     this.currentWeaponIndex = index;
     this.weapons[this.currentWeaponIndex]?.updateUI();
@@ -399,6 +463,26 @@ export class ArenaScene extends Phaser.Scene implements IArena {
         const index = parseInt(target.value, 10);
         if (!isNaN(index) && this.weapons[index]) {
           this.equipWeapon(index);
+          target.blur();
+        }
+      });
+    }
+  }
+
+  // Bind a second selector element to toggle maps live from the DOM interface
+  private setupMapDropdown() {
+    const mapDropdown = document.getElementById(
+      'map-selector'
+    ) as HTMLSelectElement | null;
+    if (mapDropdown) {
+      mapDropdown.innerHTML = Object.values(MAP_REGISTRY)
+        .map((m) => `<option value="${m.id}">${m.name}</option>`)
+        .join('');
+      mapDropdown.value = this.currentMapId;
+      mapDropdown.addEventListener('change', (e) => {
+        const target = e.target as HTMLSelectElement;
+        if (MAP_REGISTRY[target.value]) {
+          this.buildMap(target.value);
           target.blur();
         }
       });
