@@ -2,22 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Frag Arena - Gameplay</title>
-    <link rel="stylesheet" href="./game.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Main Menu</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #0a0a0c; overflow: hidden; }
+    </style>
 </head>
 <body>
-    <div id="dev-sandbox-panel">
-        <label for="weapon-selector">🔧 TEST WEAPON:</label>
-        <select id="weapon-selector">
-            <option value="0">Pistol</option>
-            <option value="1">Submachine Gun (SMG)</option>
-            <option value="2">Combat Knife</option>
-            <option value="3">Proximity Bomb</option>
-        </select>
-    </div>
-
-    <div id="phaser-app"></div>
-    <script type="module" src="./game.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="./game.tsx"></script>
 </body>
 </html>

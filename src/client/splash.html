@@ -2,20 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Frag Arena - Splash</title>
-    <link rel="stylesheet" href="./splash.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Splash Screen</title>
+    <style>
+        body { margin: 0; padding: 0; background-color: #0a0a0c; overflow: hidden; }
+    </style>
 </head>
 <body>
-    <div id="splash-container">
-        <h1 class="game-title">FRAG ARENA</h1>
-        <p class="game-subtitle">2D Platform Brawler</p>
-        
-        <button id="play-button" class="btn-play">
-            <span>PLAY</span>
-        </button>
-    </div>
-
-    <script type="module" src="./splash.ts"></script>
+    <div id="root"></div>
+    <script type="module" src="./splash.tsx"></script>
 </body>
 </html>
