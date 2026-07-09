@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 
+type Joint = { x: number; y: number };
+
 export class Player {
   public id: string;
   public teamId: string;
@@ -14,6 +16,8 @@ export class Player {
   private readonly armLen2 = 22;
   private readonly legLen1: number = 28;
   private readonly legLen2 = 28;
+  // --- STEP 4 RUN CYCLE TRACKING ---
+  private walkTime: number = 0;
 
   public jumpCount: number = 0;
   public readonly MAX_JUMPS: number = 2;
@@ -84,61 +88,195 @@ export class Player {
     }
   }
 
+  /**
+   * Solves a 2-joint Inverse Kinematics system (Shoulder->Elbow->Hand or Hip->Knee->Foot)
+   * Returns the position of the middle joint (Elbow/Knee).
+   */
+  private solveIK(
+    root: Joint,
+    target: Joint,
+    len1: number,
+    len2: number,
+    flipJoint: boolean
+  ): Joint {
+    const dx = target.x - root.x;
+    const dy = target.y - root.y;
+    let dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Max Reach Constraint: If the target is too far away, clamp it to maximum extension
+    const maxReach = len1 + len2 - 0.1;
+    if (dist > maxReach) {
+      const angle = Math.atan2(dy, dx);
+      target.x = root.x + Math.cos(angle) * maxReach;
+      target.y = root.y + Math.sin(angle) * maxReach;
+      dist = maxReach;
+    }
+
+    // Apply Law of Cosines to extract the internal joint angle
+    const cosAngle =
+      (len1 * len1 + dist * dist - len2 * len2) / (2 * len1 * dist);
+    const innerAngle = Math.acos(Phaser.Math.Clamp(cosAngle, -1, 1));
+    const baseAngle = Math.atan2(dy, dx);
+
+    // Flip joint bend direction depending on structural mapping
+    const finalAngle = flipJoint
+      ? baseAngle - innerAngle
+      : baseAngle + innerAngle;
+
+    return {
+      x: root.x + Math.cos(finalAngle) * len1,
+      y: root.y + Math.sin(finalAngle) * len1,
+    };
+  }
+
   private renderSkeleton() {
     const g = this.skeletonGraphics;
     g.clear();
 
     const currentAlpha = this.isInvisible ? 0.15 : 1;
-
-    // Line styling (4px thick white strokes)
     g.lineStyle(4, 0xffffff, currentAlpha);
     g.fillStyle(0xffffff, currentAlpha);
 
-    // Fetch the absolute middle point coordinates of your moving physics body box
     const px = this.sprite.x;
     const py = this.sprite.y;
 
-    // --- POSITION SHIFT FIX ---
-    // By sliding our vertical anchors up slightly relative to the center (py),
-    // we guarantee the total length of the body + legs fits exactly inside the 95px hitbox height.
+    // 1. Central spine structural coordinates
     const neck = { x: px, y: py - 32 };
     const pelvis = { x: px, y: py + 3 };
 
-    // 1. Draw Head and Torso Spine
+    // Draw Head and Torso Spine
     g.fillCircle(neck.x, neck.y - this.headRadius, this.headRadius);
     g.lineBetween(neck.x, neck.y, pelvis.x, pelvis.y);
 
-    // 2. Draw T-POSE ARMS (Strictly Horizontal from neck)
-    const leftElbowX = neck.x - this.armLen1;
-    const leftHandX = leftElbowX - this.armLen2;
-    g.lineBetween(neck.x, neck.y, leftElbowX, neck.y);
-    g.lineBetween(leftElbowX, neck.y, leftHandX, neck.y);
+    const isRight = this.facingDirection === 'RIGHT';
+    const directionSign = isRight ? 1 : -1;
 
-    const rightElbowX = neck.x + this.armLen1;
-    const rightHandX = rightElbowX + this.armLen2;
-    g.lineBetween(neck.x, neck.y, rightElbowX, neck.y);
-    g.lineBetween(rightElbowX, neck.y, rightHandX, neck.y);
+    // 2. ARMS: Dynamic IK Execution
+    const backHandTarget: Joint = {
+      x: neck.x + directionSign * 32,
+      y: neck.y + 14,
+    };
+    const frontHandTarget: Joint = {
+      x: neck.x + directionSign * 45,
+      y: neck.y + 8,
+    };
 
-    // 3. Draw T-POSE LEGS (Branching straight from the bottom of the body spine)
-    // Instead of separate left/right hip starting blocks, both start exactly at 'pelvis'
-    // and angle outwards slightly to look structurally correct.
-    const legSpreadAngle = 0.15; // Radians (~8 degrees) outward angle split
+    const backElbow = this.solveIK(
+      neck,
+      backHandTarget,
+      this.armLen1,
+      this.armLen2,
+      !isRight
+    );
+    g.lineBetween(neck.x, neck.y, backElbow.x, backElbow.y);
+    g.lineBetween(backElbow.x, backElbow.y, backHandTarget.x, backHandTarget.y);
 
-    // Left Leg Math
-    const leftKneeX = pelvis.x - Math.sin(legSpreadAngle) * this.legLen1;
-    const leftKneeY = pelvis.y + Math.cos(legSpreadAngle) * this.legLen1;
-    const leftFootX = leftKneeX - Math.sin(legSpreadAngle) * this.legLen2;
-    const leftFootY = leftKneeY + Math.cos(legSpreadAngle) * this.legLen2;
-    g.lineBetween(pelvis.x, pelvis.y, leftKneeX, leftKneeY); // Pelvis to Knee
-    g.lineBetween(leftKneeX, leftKneeY, leftFootX, leftFootY); // Knee to Foot
+    const frontElbow = this.solveIK(
+      neck,
+      frontHandTarget,
+      this.armLen1,
+      this.armLen2,
+      !isRight
+    );
+    g.lineBetween(neck.x, neck.y, frontElbow.x, frontElbow.y);
+    g.lineBetween(
+      frontElbow.x,
+      frontElbow.y,
+      frontHandTarget.x,
+      frontHandTarget.y
+    );
 
-    // Right Leg Math
-    const rightKneeX = pelvis.x + Math.sin(legSpreadAngle) * this.legLen1;
-    const rightKneeY = pelvis.y + Math.cos(legSpreadAngle) * this.legLen1;
-    const rightFootX = rightKneeX + Math.sin(legSpreadAngle) * this.legLen2;
-    const rightFootY = rightKneeY + Math.cos(legSpreadAngle) * this.legLen2;
-    g.lineBetween(pelvis.x, pelvis.y, rightKneeX, rightKneeY); // Pelvis to Knee
-    g.lineBetween(rightKneeX, rightKneeY, rightFootX, rightFootY); // Knee to Foot
+    // 3. LEGS: Procedural Walk Cycle & Jump Pose Math
+    const groundY = py + 47.5;
+    const vx = this.sprite.body.velocity.x;
+    const vy = this.sprite.body.velocity.y;
+    const isGrounded =
+      this.sprite.body.touching.down || this.sprite.body.blocked.down;
+
+    // Initialize default baseline foot coordinates
+    let leftFootTarget: Joint = { x: pelvis.x - 12, y: groundY };
+    let rightFootTarget: Joint = { x: pelvis.x + 12, y: groundY };
+
+    if (isGrounded) {
+      // GROUNDED RUNNING POSE LOGIC
+      // Advance the walk cycle timeline proportionally to horizontal physics speed
+      if (Math.abs(vx) > 5) {
+        this.walkTime += Math.abs(vx) * 0.0006;
+      }
+
+      // Stride size constraints
+      const strideLength = 16;
+      const stepHeight = 10;
+
+      // Check how fast we are moving relative to average velocity to blend the legs seamlessly
+      const runningIntensity = Phaser.Math.Clamp(Math.abs(vx) / 300, 0, 1);
+
+      // Left Leg Cycle (Phase angle 0)
+      const leftAngle = this.walkTime;
+      const leftXOffset = Math.cos(leftAngle) * strideLength;
+      // Only lift foot on forward swing (when sin is positive)
+      const leftYOffset =
+        Math.sin(leftAngle) > 0 ? -Math.sin(leftAngle) * stepHeight : 0;
+
+      // Right Leg Cycle (Phase offset by PI radians / 180 degrees to alternate footsteps)
+      const rightAngle = this.walkTime + Math.PI;
+      const rightXOffset = Math.cos(rightAngle) * strideLength;
+      const rightYOffset =
+        Math.sin(rightAngle) > 0 ? -Math.sin(rightAngle) * stepHeight : 0;
+
+      // Apply calculated cyclic offsets scaled by current movement intensity
+      leftFootTarget.x += leftXOffset * runningIntensity;
+      leftFootTarget.y += leftYOffset * runningIntensity;
+
+      rightFootTarget.x += rightXOffset * runningIntensity;
+      rightFootTarget.y += rightYOffset * runningIntensity;
+    } else {
+      // AIRBORNE JUMP POSE LOGIC
+      // If flying upward, pull knees up into a compact jumping stance
+      if (vy < 0) {
+        leftFootTarget.y = groundY - 14;
+        leftFootTarget.x = pelvis.x - 6;
+
+        rightFootTarget.y = groundY - 8;
+        rightFootTarget.x = pelvis.x + 4;
+      } else {
+        // If falling downward, extend legs straight down anticipating ground contact
+        leftFootTarget.y = groundY + 4;
+        leftFootTarget.x = pelvis.x - 8;
+
+        rightFootTarget.y = groundY + 4;
+        rightFootTarget.x = pelvis.x + 8;
+      }
+    }
+
+    // Solve for the dynamic Knee coordinate targets using your IK core
+    const leftKnee = this.solveIK(
+      pelvis,
+      leftFootTarget,
+      this.legLen1,
+      this.legLen2,
+      isRight
+    );
+    const rightKnee = this.solveIK(
+      pelvis,
+      rightFootTarget,
+      this.legLen1,
+      this.legLen2,
+      isRight
+    );
+
+    // Draw Left Leg (Hip -> Knee -> Foot)
+    g.lineBetween(pelvis.x, pelvis.y, leftKnee.x, leftKnee.y);
+    g.lineBetween(leftKnee.x, leftKnee.y, leftFootTarget.x, leftFootTarget.y);
+
+    // Draw Right Leg (Hip -> Knee -> Foot)
+    g.lineBetween(pelvis.x, pelvis.y, rightKnee.x, rightKnee.y);
+    g.lineBetween(
+      rightKnee.x,
+      rightKnee.y,
+      rightFootTarget.x,
+      rightFootTarget.y
+    );
   }
 
   public applyKnockback(kbX: number, kbY: number) {
