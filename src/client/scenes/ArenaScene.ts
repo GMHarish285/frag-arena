@@ -11,9 +11,20 @@ import { Shotgun } from '../entities/weapons/Shotgun';
 import { MachineGun } from '../entities/weapons/MachineGun';
 import { RocketLauncher } from '../entities/weapons/RocketLauncher';
 import { Uzi } from '../entities/weapons/Uzi';
-
-// Import decoupled map components
 import { MAP_REGISTRY, IMapData } from '../maps/MapConfig';
+
+// Define ammo/durability rules for crates (Index 0 is Pistol, handled as infinite)
+const AMMO_CONFIG: Record<number, number> = {
+  1: 30, // SMG (bullets)
+  2: 5, // Knife (throws)
+  3: 3, // Bomb (bombs)
+  4: 5, // Sniper (bullets)
+  5: 100, // Umbrella (health capacity)
+  6: 8, // Shotgun (blasts)
+  7: 50, // MachineGun (bullets)
+  8: 4, // Rocket Launcher (rockets)
+  9: 40, // Uzi (bullets)
+};
 
 export class ArenaScene extends Phaser.Scene implements IArena {
   private player1!: Player;
@@ -21,39 +32,45 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   private playersGroup!: Phaser.Physics.Arcade.Group;
 
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
+  private crates!: Phaser.Physics.Arcade.StaticGroup; // New crates group
+
   private projectiles!: Phaser.Physics.Arcade.Group;
   private rockets!: Phaser.Physics.Arcade.Group;
   private solidBombs!: Phaser.Physics.Arcade.Group;
   private meleeSlashes!: Phaser.Physics.Arcade.Group;
 
   private keys!: any;
-  private ammoText!: Phaser.GameObjects.Text;
   private scoreText!: Phaser.GameObjects.Text;
 
+  // Single instances of weapons to route logic
   private weapons: Weapon[] = [];
-  private currentWeaponIndex: number = 0;
 
-  // Track map selection states
+  // Independent Player States
+  private p1WeaponIndex: number = 0;
+  private p1Ammo: number = -1; // -1 represents infinite (Pistol)
+
+  private dummyWeaponIndex: number = 0;
+  private dummyAmmo: number = -1;
+
   private activeMapConfig!: IMapData;
-  private currentMapId: string = 0 && 'verticalChasm' || 1 && 'classic';
+  private currentMapId: string = 'classic';
 
   constructor() {
     super({ key: 'ArenaScene' });
   }
 
   create() {
-    // 1. Core Physics Systems Setup
     this.platforms = this.physics.add.staticGroup();
+    this.crates = this.physics.add.staticGroup();
     this.playersGroup = this.physics.add.group();
+
     this.projectiles = this.physics.add.group();
     this.rockets = this.physics.add.group();
     this.solidBombs = this.physics.add.group();
     this.meleeSlashes = this.physics.add.group();
 
-    // 2. Load Selected Map Layout
     this.buildMap(this.currentMapId);
 
-    // 3. Spawners Using Map-Specific Anchors
     const spawnPoints = this.activeMapConfig.spawnPoints;
     this.player1 = new Player(
       this,
@@ -79,15 +96,16 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.playersGroup.add(this.player1.sprite);
     this.playersGroup.add(this.dummy.sprite);
 
-    // 4. Asset Generation
+    // Asset Generation
     this.generateTexture('bullet_tex', 20, 8, 0xffd700);
     this.generateTexture('pistol_thrown_tex', 30, 20, 0x555555);
     this.generateTexture('knife_tex', 40, 10, 0xcccccc);
     this.generateTexture('bomb_tex', 30, 30, 0xff0000);
     this.generateTexture('rocket_tex', 40, 15, 0xff8800);
     this.generateTexture('slash_tex', 60, 60, 0xffffff);
+    this.generateTexture('crate_tex', 32, 32, 0xd2b48c); // Supply Crate
 
-    // 5. Physics Overlaps & Colliders Rules
+    // Colliders & Overlaps
     this.physics.add.collider(
       this.playersGroup,
       this.platforms,
@@ -103,6 +121,11 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       this
     );
 
+    // Crate Pickup Overlap
+    this.physics.add.overlap(this.playersGroup, this.crates, (p, c) =>
+      this.handleCratePickup(p, c)
+    );
+
     this.physics.add.overlap(this.playersGroup, this.projectiles, (p, proj) =>
       this.handleHit(p, proj)
     );
@@ -116,19 +139,12 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       this.handleHit(p, slash, false)
     );
 
-    // 6. UI Text Layouts
-    this.ammoText = this.add.text(50, 50, '', {
-      fontSize: '32px',
-      color: '#ffffff',
-      fontStyle: 'bold',
-    });
-    this.scoreText = this.add.text(50, 100, '', {
+    this.scoreText = this.add.text(50, 50, '', {
       fontSize: '24px',
       color: '#818384',
       fontFamily: 'sans-serif',
     });
 
-    // 7. Initialize Arsenal Setup
     this.weapons = [
       new Pistol(this),
       new SMG(this),
@@ -141,69 +157,133 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       new RocketLauncher(this),
       new Uzi(this),
     ];
-    this.equipWeapon(0);
 
-    // 8. Capture Inputs
+    // Equip default pistols
+    this.giveWeaponToPlayer(this.player1, 0);
+    this.giveWeaponToPlayer(this.dummy, 0);
+
     this.keys = this.input.keyboard!.addKeys(
       'W,A,S,D,T,Y,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE,ZERO'
     ) as any;
 
-    this.setupDropdown();
-    this.setupMapDropdown(); // Optional: Hook custom DOM switcher for maps
+    // Start Supply Drop Loop (spawns every 6 seconds)
+    this.time.addEvent({
+      delay: 6000,
+      callback: this.spawnCrate,
+      callbackScope: this,
+      loop: true,
+    });
   }
 
-  /**
-   * Cleans past platform entities and dynamically spawns geometry for a target map asset
-   */
   public buildMap(mapId: string) {
     const config = MAP_REGISTRY[mapId];
     if (!config) return;
-
     this.currentMapId = mapId;
     this.activeMapConfig = config;
-
-    // Clear structural assets if they exist from prior generation runs
     this.platforms.clear(true, true);
 
-    // Iterate through map platforms registry
     config.platforms.forEach((plat) => {
       this.createPlatform(plat.x, plat.y, plat.width, plat.height, plat.color);
     });
 
-    // If game entities have already been created, teleport them to the new starting locations
     if (this.player1 && this.dummy) {
       this.player1.sprite.setPosition(
         config.spawnPoints.player1.x,
         config.spawnPoints.player1.y
       );
-      this.player1.sprite.setVelocity(0, 0);
       this.dummy.sprite.setPosition(
         config.spawnPoints.dummy.x,
         config.spawnPoints.dummy.y
       );
-      this.dummy.sprite.setVelocity(0, 0);
     }
   }
+
+  // --- CRATE & WEAPON MANAGEMENT ---
+
+  private spawnCrate() {
+    // Clear any existing unclaimed crates from the map first
+    this.crates.clear(true, true);
+
+    const platforms = this.activeMapConfig.platforms;
+    if (!platforms || platforms.length === 0) return;
+
+    // Pick a random platform
+    const plat = Phaser.Utils.Array.GetRandom(platforms);
+
+    // Calc valid boundaries on top of the platform
+    const minX = plat.x - plat.width / 2 + 16;
+    const maxX = plat.x + plat.width / 2 - 16;
+
+    const spawnX = Phaser.Math.Between(minX, maxX);
+    const spawnY = plat.y - plat.height / 2 - 16; // Rest perfectly on top
+
+    this.crates.create(spawnX, spawnY, 'crate_tex');
+  }
+
+  private handleCratePickup(pSprite: any, crateSprite: any) {
+    crateSprite.destroy(); // Consume crate
+    const player = pSprite.getData('entity') as Player;
+
+    // Give random crate weapon (Indices 1 through 9)
+    const randomWepIndex = Phaser.Math.Between(1, 9);
+    this.giveWeaponToPlayer(player, randomWepIndex);
+  }
+
+  private giveWeaponToPlayer(player: Player, index: number) {
+    const ammo = index === 0 ? -1 : (AMMO_CONFIG[index] as number);
+
+    if (player.id === this.player1.id) {
+      this.p1WeaponIndex = index;
+      this.p1Ammo = ammo;
+    } else {
+      this.dummyWeaponIndex = index;
+      this.dummyAmmo = ammo;
+    }
+    this.weapons[index]?.updateUI(); // Optional hook for UI updates
+  }
+
+  private consumeAmmo(shooter: Player, amount: number) {
+    if (shooter.id === this.player1.id && this.p1WeaponIndex !== 0) {
+      this.p1Ammo -= amount;
+      if (this.p1Ammo <= 0) this.giveWeaponToPlayer(shooter, 0); // Revert to Pistol
+    } else if (shooter.id === this.dummy.id && this.dummyWeaponIndex !== 0) {
+      this.dummyAmmo -= amount;
+      if (this.dummyAmmo <= 0) this.giveWeaponToPlayer(shooter, 0);
+    }
+  }
+
+  // --- COMBAT LOGIC ---
 
   private handleHit(pSprite: any, hazard: any, destroyHazard: boolean = true) {
     const player = pSprite.getData('entity') as Player;
     const shooterId = hazard.getData('shooterId');
+    const damage = hazard.getData('damage');
 
     if (player.id === shooterId || player.teamId === hazard.getData('teamId'))
       return;
 
+    // Umbrella Block Interception
     if (player.isBlocking && !hazard.getData('isExplosive')) {
       const attackFromRight = hazard.x > player.sprite.x;
       if (
         (attackFromRight && player.facingDirection === 'RIGHT') ||
         (!attackFromRight && player.facingDirection === 'LEFT')
       ) {
+        // Damage Umbrella Health directly if blocked
+        const wepIndex =
+          player.id === this.player1.id
+            ? this.p1WeaponIndex
+            : this.dummyWeaponIndex;
+        if (wepIndex === 5) {
+          this.consumeAmmo(player, damage); // umbrella breaks if ammo reaches 0
+        }
+
         if (destroyHazard) hazard.destroy();
         return;
       }
     }
 
-    player.takeDamage(hazard.getData('damage'));
+    player.takeDamage(damage);
     player.applyKnockback(hazard.getData('kbX'), hazard.getData('kbY'));
 
     if (destroyHazard) {
@@ -224,9 +304,9 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   addTimer(delay: number, callback: () => void, repeat: number = 0) {
     this.time.addEvent({ delay, callback, repeat });
   }
-  updateAmmoUI(text: string) {
-    this.ammoText.setText(text);
-  }
+  updateAmmoUI(text: string) {}
+
+  // --- SPAWNERS (Auto-consume ammo upon firing) ---
 
   spawnProjectile(
     x: number,
@@ -253,6 +333,9 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     proj.setData('kbY', kbY);
     proj.setData('damage', damage);
     proj.setData('isExplosive', false);
+
+    // Consume Ammo (Works perfectly for guns & Knife Throws)
+    this.consumeAmmo(shooter, 1);
   }
 
   spawnRocket(
@@ -281,6 +364,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     r.setData('isExplosive', true);
     r.setData('homingStrength', homingStrength);
 
+    this.consumeAmmo(shooter, 1);
     this.time.delayedCall(2500, () => this.detonateExplosive(r));
   }
 
@@ -312,6 +396,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     bomb.setData('isExplosive', true);
     bomb.setData('isGhostBomb', !isSolid);
 
+    this.consumeAmmo(shooter, 1);
     this.time.delayedCall(2000, () => {
       if (bomb.active) this.detonateExplosive(bomb);
     });
@@ -341,6 +426,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     slash.setData('damage', damage);
     slash.setData('isExplosive', false);
 
+    // Notice we DO NOT consume ammo here! This keeps Knife Primary and Umbrella Primary strictly infinite!
     this.tweens.add({
       targets: slash,
       alpha: 0,
@@ -349,46 +435,59 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     });
   }
 
+  // --- GAME LOOP ---
+
   override update(time: number) {
     this.player1.update(this.keys);
     this.dummy.update();
 
-    // Boundary Fall-Check utilizing individual dynamic map metadata
-    if (this.player1.sprite.y > this.activeMapConfig.deathY) {
+    if (this.player1.sprite.y > this.activeMapConfig.deathY)
       this.handleOutOfBoundsRespawn(
         this.player1,
         this.activeMapConfig.spawnPoints.player1
       );
-    }
-    if (this.dummy.sprite.y > this.activeMapConfig.deathY) {
+    if (this.dummy.sprite.y > this.activeMapConfig.deathY)
       this.handleOutOfBoundsRespawn(
         this.dummy,
         this.activeMapConfig.spawnPoints.dummy
       );
-    }
+
+    const p1WepName = this.weapons[this.p1WeaponIndex]?.name ?? 'Unknown';
+    const dummyWepName = this.weapons[this.dummyWeaponIndex]?.name ?? 'Unknown';
+    const formatAmmo = (ammo: number) => (ammo === -1 ? '∞' : ammo);
 
     this.scoreText.setText(
-      `Map: ${this.activeMapConfig.name}\n` +
-        `P1: HP ${this.player1.health} | Stocks: ${this.player1.lives}\n` +
-        `DUMMY: HP ${this.dummy.health} | Stocks: ${this.dummy.lives}`
+      `P1 [${p1WepName}]: HP ${this.player1.health} | Stocks: ${this.player1.lives} | Ammo: ${formatAmmo(this.p1Ammo)}\n` +
+        `DUMMY [${dummyWepName}]: HP ${this.dummy.health} | Stocks: ${this.dummy.lives} | Ammo: ${formatAmmo(this.dummyAmmo)}`
     );
 
-    // Weapon Key Listeners mapping...
-    if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) this.equipWeapon(0);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.TWO)) this.equipWeapon(1);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.THREE)) this.equipWeapon(2);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.FOUR)) this.equipWeapon(3);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.FIVE)) this.equipWeapon(4);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.SIX)) this.equipWeapon(5);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.SEVEN)) this.equipWeapon(6);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.EIGHT)) this.equipWeapon(7);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.NINE)) this.equipWeapon(8);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.ZERO)) this.equipWeapon(9);
+    // Dev cheats for weapon switching
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ONE))
+      this.giveWeaponToPlayer(this.player1, 0);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.TWO))
+      this.giveWeaponToPlayer(this.player1, 1);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.THREE))
+      this.giveWeaponToPlayer(this.player1, 2);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.FOUR))
+      this.giveWeaponToPlayer(this.player1, 3);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.FIVE))
+      this.giveWeaponToPlayer(this.player1, 4);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.SIX))
+      this.giveWeaponToPlayer(this.player1, 5);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.SEVEN))
+      this.giveWeaponToPlayer(this.player1, 6);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.EIGHT))
+      this.giveWeaponToPlayer(this.player1, 7);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.NINE))
+      this.giveWeaponToPlayer(this.player1, 8);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ZERO))
+      this.giveWeaponToPlayer(this.player1, 9);
 
-    const currentWeapon = this.weapons[this.currentWeaponIndex];
-    if (currentWeapon) {
-      if (this.keys.T.isDown) currentWeapon.primaryAttack(this.player1);
-      if (this.keys.Y.isDown) currentWeapon.secondaryAttack(this.player1);
+    // Route inputs to the Player 1's currently active weapon state
+    const p1Wep = this.weapons[this.p1WeaponIndex];
+    if (p1Wep) {
+      if (this.keys.T.isDown) p1Wep.primaryAttack(this.player1);
+      if (this.keys.Y.isDown) p1Wep.secondaryAttack(this.player1);
     }
 
     this.rockets.getChildren().forEach((r) => {
@@ -432,60 +531,11 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   ) {
     player.sprite.setPosition(spawnLoc.x, spawnLoc.y);
     player.sprite.setVelocity(0, 0);
-    // Execute default stock deduction logic here if defined inside Player class
+    this.giveWeaponToPlayer(player, 0); // Lose weapon on death
     if (typeof (player as any).handleRespawn === 'function') {
       (player as any).handleRespawn();
     } else {
-      player.takeDamage(0); // Safely trigger standard state reset fallback
-    }
-  }
-
-  private equipWeapon(index: number) {
-    this.currentWeaponIndex = index;
-    this.weapons[this.currentWeaponIndex]?.updateUI();
-    const dropdown = document.getElementById(
-      'weapon-selector'
-    ) as HTMLSelectElement | null;
-    if (dropdown) dropdown.value = String(index);
-  }
-
-  private setupDropdown() {
-    const dropdown = document.getElementById(
-      'weapon-selector'
-    ) as HTMLSelectElement | null;
-    if (dropdown) {
-      dropdown.innerHTML = this.weapons
-        .map((w, i) => `<option value="${i}">${w.name}</option>`)
-        .join('');
-      dropdown.value = String(this.currentWeaponIndex);
-      dropdown.addEventListener('change', (e) => {
-        const target = e.target as HTMLSelectElement;
-        const index = parseInt(target.value, 10);
-        if (!isNaN(index) && this.weapons[index]) {
-          this.equipWeapon(index);
-          target.blur();
-        }
-      });
-    }
-  }
-
-  // Bind a second selector element to toggle maps live from the DOM interface
-  private setupMapDropdown() {
-    const mapDropdown = document.getElementById(
-      'map-selector'
-    ) as HTMLSelectElement | null;
-    if (mapDropdown) {
-      mapDropdown.innerHTML = Object.values(MAP_REGISTRY)
-        .map((m) => `<option value="${m.id}">${m.name}</option>`)
-        .join('');
-      mapDropdown.value = this.currentMapId;
-      mapDropdown.addEventListener('change', (e) => {
-        const target = e.target as HTMLSelectElement;
-        if (MAP_REGISTRY[target.value]) {
-          this.buildMap(target.value);
-          target.blur();
-        }
-      });
+      player.takeDamage(0);
     }
   }
 

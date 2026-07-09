@@ -11,7 +11,7 @@ const config: Phaser.Types.Core.GameConfig = {
     default: 'arcade',
     arcade: {
       gravity: { x: 0, y: 2400 }, // Heavy gravity for snappy platformer feel
-      debug: false, // Set to true to see hitboxes!
+      debug: true, // Set to true to see hitboxes!
     },
   },
   scale: {
