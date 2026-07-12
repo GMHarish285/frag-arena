@@ -1,5 +1,9 @@
 import Phaser from 'phaser';
-import { ArenaScene } from './scenes/ArenaScene'; // Ensure this path matches exactly!
+import { ArenaScene } from './scenes/ArenaScene';
+import { MainMenuScene } from './scenes/MainMenuScene';
+import { StoryModeScene } from './scenes/StoryModeScene';
+import { LeaderboardScene } from './scenes/LeaderboardScene';
+import { SettingsScene } from './scenes/SettingsScene';
 
 // Note: We changed 'containerId' to 'parentEl: HTMLDivElement'
 export function launchPhaserGame(parentEl: HTMLDivElement): Phaser.Game {
@@ -20,7 +24,7 @@ export function launchPhaserGame(parentEl: HTMLDivElement): Phaser.Game {
                 debug: true 
             }
         },
-        scene: [ArenaScene]
+        scene: [MainMenuScene, ArenaScene, StoryModeScene, LeaderboardScene, SettingsScene]
     };
 
     return new Phaser.Game(config);

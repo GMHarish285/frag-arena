@@ -173,6 +173,24 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       callbackScope: this,
       loop: true,
     });
+
+    // Add this inside ArenaScene's create() method:
+    const quitBtn = this.add
+      .text(20, 20, 'QUIT TO MENU', {
+        fontSize: '20px',
+        fontFamily: 'monospace',
+        color: '#ffffff',
+        backgroundColor: '#ff3333',
+        padding: { x: 10, y: 5 },
+      })
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0) // Keeps the button glued to the camera so it doesn't move away
+      .setDepth(100); // Keeps it rendered above the stickman
+
+    quitBtn.on('pointerup', () => {
+      // Tells the Scene Manager to shut down the arena and boot the menu
+      this.scene.start('MainMenuScene');
+    });
   }
 
   public buildMap(mapId: string) {

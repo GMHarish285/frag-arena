@@ -1,1 +1,19 @@
 coyote jump
+better name
+build for logged out players
+
+refactor:
+
+arenascene:
+handle default weapons properly. it is not in ammoconfig
+update ammoconfig to use gun name for key
+use pool of weapons init at beginning and not create new weapons everytime, same for bullets
+
+extract all kinds of weapon, player, bullets mods to separate files so it is easy to config and play around and find the correct vals
+
+
+mods
+story system
+leaderboard
+bot
+fine tune configs
