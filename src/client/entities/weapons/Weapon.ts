@@ -1,4 +1,6 @@
 import { Player } from '../Player';
+import { GameConfig } from '../../config/ConfigManager';
+import { WeaponBlueprint } from '../../config/WeaponConfig';
 
 export interface IArena {
   spawnProjectile(
@@ -51,10 +53,13 @@ export interface IArena {
 }
 
 export abstract class Weapon {
+  public id: number;
   public name: string;
   public maxAmmo: number;
   public currentAmmo: number;
   public isReloading: boolean = false;
+
+  public config: WeaponBlueprint;
 
   protected scene: IArena;
   protected primaryCooldown: number;
@@ -62,23 +67,31 @@ export abstract class Weapon {
   protected lastPrimary: number = 0;
   protected lastSecondary: number = 0;
 
-  constructor(
-    scene: IArena,
-    name: string,
-    maxAmmo: number,
-    primaryCd: number,
-    secondaryCd: number
-  ) {
+  /**
+   * Refactored to read configuration parameters cleanly out of GameConfig memory.
+   * Allows live mods and runtime adjustments without mutating asset files!
+   */
+  constructor(scene: IArena, weaponId: number) {
     this.scene = scene;
-    this.name = name;
-    this.maxAmmo = maxAmmo;
-    this.currentAmmo = maxAmmo;
-    this.primaryCooldown = primaryCd;
-    this.secondaryCooldown = secondaryCd;
+
+    const weaponStats: WeaponBlueprint = GameConfig.weapons[weaponId]!;
+    if (!weaponStats) {
+      throw new Error(
+        `Weapon Initialization Panic: ID ${weaponId} is missing from configuration registries.`
+      );
+    }
+
+    this.config = weaponStats;
+    this.id = weaponId;
+    this.name = weaponStats.name;
+    this.maxAmmo = weaponStats.maxAmmo;
+    this.currentAmmo = weaponStats.maxAmmo;
+    this.primaryCooldown = weaponStats.primaryCooldown;
+    this.secondaryCooldown = weaponStats.secondaryCooldown;
   }
 
-  abstract onPrimary(shooter: Player): void;
-  abstract onSecondary(shooter: Player): void;
+  public abstract onPrimary(shooter: Player): void;
+  public abstract onSecondary(shooter: Player): void;
 
   public primaryAttack(shooter: Player) {
     if (
@@ -103,9 +116,12 @@ export abstract class Weapon {
   }
 
   public triggerReload(duration: number = 1200) {
+    // Safety exit check: Fallback defaults with Infinity capacity cannot enter reload sequences
     if (this.isReloading || this.maxAmmo === Infinity) return;
+
     this.isReloading = true;
     this.scene.updateAmmoUI(`${this.name}: RELOADING...`);
+
     this.scene.addTimer(duration, () => {
       this.currentAmmo = this.maxAmmo;
       this.isReloading = false;
@@ -127,8 +143,11 @@ export abstract class Weapon {
     );
   }
 
-  protected applyHorizontalRecoil(shooter: Player, power: number) {
-    const pushVelocity = shooter.facingDirection === 'RIGHT' ? -power : power;
-    shooter.sprite.setVelocityX(shooter.sprite.body.velocity.x + pushVelocity);
+  protected applyHorizontalRecoil(shooter: Player, force: number) {
+    if (!shooter.sprite || !shooter.sprite.body) return;
+    const knockbackDirection = shooter.facingDirection === 'RIGHT' ? -1 : 1;
+    shooter.sprite.setVelocityX(
+      shooter.sprite.body.velocity.x + force * knockbackDirection
+    );
   }
 }

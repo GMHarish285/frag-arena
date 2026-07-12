@@ -1,0 +1,2279 @@
+config/PlayerConfig.ts:
+export const BasePlayerConfig = {
+  movement: {
+    accelerationRate: 1800,
+    groundDrag: 4400,
+    airDrag: 2000,
+    jumpVelocity: -850,
+    maxJumps: 2,
+    coyoteTimeMs: 200,
+  },
+  stats: {
+    maxHealth: 100,
+    startingLives: 3,
+  },
+};
+
+
+config/ConfigManager.ts:
+import { BaseWorldConfig } from './WorldConfig';
+import { BasePlayerConfig } from './PlayerConfig';
+import { BaseWeaponConfig } from './WeaponConfig';
+import { MAP_REGISTRY } from './MapConfig';
+
+class ConfigurationManager {
+    private static instance: ConfigurationManager;
+
+    public world!: typeof BaseWorldConfig;
+    public player!: typeof BasePlayerConfig;
+    public weapons!: typeof BaseWeaponConfig;
+    public maps = MAP_REGISTRY;
+
+    private constructor() {
+        this.resetToBase();
+    }
+
+    public static getInstance(): ConfigurationManager {
+        if (!ConfigurationManager.instance) {
+            ConfigurationManager.instance = new ConfigurationManager();
+        }
+        return ConfigurationManager.instance;
+    }
+
+    public resetToBase() {
+        // Deep clone allows us to mutate stats in-memory during gameplay safely
+        this.world = JSON.parse(JSON.stringify(BaseWorldConfig));
+        this.player = JSON.parse(JSON.stringify(BasePlayerConfig));
+        this.weapons = JSON.parse(JSON.stringify(BaseWeaponConfig));
+    }
+}
+
+export const GameConfig = ConfigurationManager.getInstance();
+
+config/MapConfig.ts:
+export interface IPlatformConfig {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  color: number;
+}
+
+export interface IMapData {
+  id: string;
+  name: string;
+  platforms: IPlatformConfig[];
+  spawnPoints: {
+    player1: { x: number; y: number };
+    dummy: { x: number; y: number };
+  };
+  deathY: number; // Y-coordinate benchmark below which players count as knocked off-stage
+}
+
+export const MAP_REGISTRY: Record<string, IMapData> = {
+  classic: {
+    id: 'classic',
+    name: 'Classic Mayhem Arena',
+    spawnPoints: {
+      player1: { x: 760, y: 500 },
+      dummy: { x: 1160, y: 500 }
+    },
+    deathY: 1100,
+    platforms: [
+      { x: 960, y: 800, width: 800, height: 40, color: 0x888888 }, // Main floor
+      { x: 450, y: 600, width: 500, height: 40, color: 0x888888 }, // Left platform
+      { x: 1470, y: 600, width: 500, height: 40, color: 0x888888 }  // Right platform
+    ]
+  },
+  verticalChasm: {
+    id: 'verticalChasm',
+    name: 'Vertical Chasm',
+    spawnPoints: {
+      player1: { x: 500, y: 300 },
+      dummy: { x: 1420, y: 300 }
+    },
+    deathY: 1100,
+    platforms: [
+      { x: 960, y: 950, width: 400, height: 40, color: 0xaa4444 }, // Small risky bottom center
+      { x: 500, y: 700, width: 450, height: 40, color: 0x555555 },
+      { x: 1420, y: 700, width: 450, height: 40, color: 0x555555 },
+      { x: 960, y: 450, width: 500, height: 40, color: 0x666666 }  // High floating bridge
+    ]
+  }
+};
+
+config/WeaponConfig.ts:
+export type WeaponTier = 'DEFAULT' | 'CRATE';
+
+export interface AttackConfig {
+  damage: number;
+  speed?: number; // Linear speed for physics-based projectiles
+  speedY?: number; // Vertical velocity for arcs/lobbed items (e.g. Bomb)
+  recoil?: number; // Knockback applied to the shooter when firing
+  kbX?: number; // Horizontal knockback applied to the target hit
+  kbY?: number; // Vertical knockback applied to the target hit
+  pellets?: number; // Count of multi-pellet configurations (Shotgun)
+  spread?: number; // Total vertical variation range for multi-pellets
+  isSolid?: boolean; // Structural property flag for explosives
+  homing?: number; // Homing scaling multiplier coefficients (Rockets)
+}
+
+export interface WeaponBlueprint {
+  id: number;
+  name: string;
+  maxAmmo: number; // Evaluates to Infinity for starter fallback classes
+  tier: WeaponTier;
+  primaryCooldown: number;
+  secondaryCooldown: number;
+  primary: AttackConfig;
+  secondary: AttackConfig;
+}
+
+export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
+  // 0: PISTOL (Default Starter Fallback Loadout)
+  0: {
+    id: 0,
+    name: 'PISTOL',
+    maxAmmo: 12, // Standard capacity before triggers enforce reload limits
+    tier: 'DEFAULT',
+    primaryCooldown: 250,
+    secondaryCooldown: 1000,
+    primary: { damage: 15, speed: 1200, recoil: 150, kbX: 400, kbY: -100 },
+    secondary: { damage: 30, speed: 800, recoil: 0, kbX: 600, kbY: -200 }, // Thrown weapon payload frame
+  },
+
+  // 1: SMG (Submachine Gun Crate Drop)
+  1: {
+    id: 1,
+    name: 'SMG',
+    maxAmmo: 30,
+    tier: 'CRATE',
+    primaryCooldown: 80,
+    secondaryCooldown: 500,
+    primary: { damage: 8, speed: 1400, recoil: 90, kbX: 90, kbY: -40 },
+    secondary: { damage: 12, speed: 1800, recoil: 150, kbX: 140, kbY: -80 }, // Heavy tracer burst logic
+  },
+
+  // 2: TACTICAL KNIFE (Melee / Bladed Fallback Drop Variant)
+  2: {
+    id: 2,
+    name: 'KNIFE',
+    maxAmmo: Infinity, // Melee weapon frame that never depletes or locks down
+    tier: 'DEFAULT',
+    primaryCooldown: 400,
+    secondaryCooldown: 800,
+    primary: { damage: 25, kbX: 300, kbY: -200 }, // Melee sweep slice coordinates
+    secondary: { damage: 35, speed: 1000, kbX: 400, kbY: -150 }, // Thrown dagger velocity profiles
+  },
+
+  // 3: EXPLOSIVE BOMB (Grenade/Mine Weapon Node)
+  3: {
+    id: 3,
+    name: 'BOMB',
+    maxAmmo: 5,
+    tier: 'CRATE',
+    primaryCooldown: 800,
+    secondaryCooldown: 800,
+    primary: {
+      damage: 40,
+      speed: 400,
+      speedY: -500,
+      kbX: 800,
+      kbY: -700,
+      isSolid: true,
+    }, // High-explosive bouncing mine
+    secondary: {
+      damage: 30,
+      speed: 200,
+      speedY: 100,
+      kbX: 600,
+      kbY: -500,
+      isSolid: false,
+    }, // Proximity capsule bypass module
+  },
+
+  // 4: SNIPER RIFLE (High-Velocity Piercing Rail Variant)
+  4: {
+    id: 4,
+    name: 'SNIPER',
+    maxAmmo: 5,
+    tier: 'CRATE',
+    primaryCooldown: 1200,
+    secondaryCooldown: 500,
+    primary: { damage: 55, speed: 2500, recoil: 300, kbX: 800, kbY: -200 }, // Armor piercing heavy bullet trace
+    secondary: { damage: 0 }, // Cloaking tracking loop hook (handled procedurally by player visibility)
+  },
+
+  // 5: PARASOL UMBRELLA (Defensive Tactical Shield Asset)
+  5: {
+    id: 5,
+    name: 'UMBRELLA',
+    maxAmmo: Infinity,
+    tier: 'DEFAULT',
+    primaryCooldown: 400,
+    secondaryCooldown: 1500,
+    primary: { damage: 18, kbX: 300, kbY: -300 }, // Steel rib jab melee tracking vector
+    secondary: { damage: 0 }, // Blocking active parry tracking shield duration loop
+  },
+
+  // 6: COMBAT SHOTGUN (Symmetrical Multi-Pellet Scatter Blaster)
+  6: {
+    id: 6,
+    name: 'SHOTGUN',
+    maxAmmo: 6,
+    tier: 'CRATE',
+    primaryCooldown: 800,
+    secondaryCooldown: 1200,
+    primary: {
+      damage: 12,
+      speed: 1000,
+      recoil: 250,
+      kbX: 200,
+      kbY: -50,
+      pellets: 3,
+      spread: 150,
+    },
+    secondary: {
+      damage: 15,
+      speed: 1200,
+      recoil: 400,
+      kbX: 300,
+      kbY: -100,
+      pellets: 5,
+      spread: 300,
+    },
+  },
+
+  // 7: HEAVY MACHINE GUN (Sustained Automatic Suppression Frame)
+  7: {
+    id: 7,
+    name: 'MACHINE GUN',
+    maxAmmo: 50,
+    tier: 'CRATE',
+    primaryCooldown: 1000, // Safe threshold interval for tracking core loop cycles
+    secondaryCooldown: 600,
+    primary: { damage: 14, speed: 1600, recoil: 60, kbX: 120, kbY: -50 }, // Rapid automatic fire cycles
+    secondary: { damage: 28, kbX: 400, kbY: -100 }, // Heavy rifle stock butt-strike physical push
+  },
+
+  // 8: TACTICAL ROCKET LAUNCHER (Heavy Ballistic Blast Cannon)
+  8: {
+    id: 8,
+    name: 'ROCKET LAUNCHER',
+    maxAmmo: 4,
+    tier: 'CRATE',
+    primaryCooldown: 1500,
+    secondaryCooldown: 1500,
+    primary: {
+      damage: 45,
+      speed: 800,
+      recoil: 300,
+      kbX: 900,
+      kbY: -600,
+      homing: 0,
+    }, // Direct dumb rocket deployment
+    secondary: {
+      damage: 35,
+      speed: 600,
+      speedY: -200,
+      recoil: 300,
+      kbX: 800,
+      kbY: -500,
+      homing: 0.05,
+    }, // Core guided tracking missile logic
+  },
+
+  // 9: COMPACT UZI (High-Spread Spray Machine Pistol)
+  9: {
+    id: 9,
+    name: 'UZI',
+    maxAmmo: 40,
+    tier: 'CRATE',
+    primaryCooldown: 60,
+    secondaryCooldown: 60,
+    primary: { damage: 7, speed: 1200, recoil: 40, kbX: 80, kbY: -20 }, // Linear straight vector spray stream
+    secondary: {
+      damage: 9,
+      speed: 1000,
+      recoil: 40,
+      kbX: 100,
+      kbY: -40,
+      spread: 300,
+    }, // Cone-based angular variance calculation
+  },
+};
+
+
+config/WorldConfig.ts:
+export const BaseWorldConfig = {
+    physics: {
+        gravityY: 2400,
+    },
+    boundaries: {
+        minX: -200,
+        maxX: 2120,
+        killY: 1500, // Falling below this triggers death/respawn
+        padding: 150
+    }
+};
+
+entities/Player2.ts:
+import Phaser from 'phaser';
+import { GameConfig } from '../config/ConfigManager'; // ◄── Pulls in centralized stats
+
+type Joint = { x: number; y: number };
+
+export class Player {
+  public id: string;
+  public teamId: string;
+  public sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+
+  // --- STEP 2: ADD SKELETON BONE CONFIGURATIONS (THE RIG) ---
+  private skeletonGraphics!: Phaser.GameObjects.Graphics;
+  private readonly spineLength: number = 35;
+  private readonly headRadius: number = 12;
+  private readonly armLen1: number = 22;
+  private readonly armLen2 = 22;
+  private readonly legLen1: number = 28;
+  private readonly legLen2 = 28;
+  
+  // --- STEP 4 RUN CYCLE TRACKING ---
+  private walkTime: number = 0;
+
+  public jumpCount: number = 0;
+  public facingDirection: 'LEFT' | 'RIGHT' = 'RIGHT';
+
+  public isBlocking: boolean = false;
+  public isInvisible: boolean = false;
+
+  public health: number;
+  public lives: number;
+
+  // Weapon tracking states
+  public currentWeaponId: number = 0;
+  public currentWeaponAmmo: number = Infinity;
+  public lastFiredTime: number = 0;
+
+  constructor(scene: Phaser.Scene, x: number, y: number, id: string, teamId: string) {
+    this.id = id;
+    this.teamId = teamId;
+
+    // Setup player physics sprite
+    this.sprite = scene.physics.add.sprite(x, y, 'player_base') as any;
+    this.sprite.setCollideWorldBounds(false);
+    
+    // USE CONFIG: Gravity
+    this.sprite.setGravityY(GameConfig.world.physics.gravityY);
+
+    // USE CONFIG: Health & Lives
+    this.health = GameConfig.player.stats.maxHealth;
+    this.lives = GameConfig.player.stats.startingLives;
+
+    this.skeletonGraphics = scene.add.graphics();
+    this.skeletonGraphics.setDepth(5);
+  }
+
+  public update(keys?: any) {
+    // --- READ FROM CONFIG ---
+    const { accelerationRate, groundDrag, airDrag, jumpVelocity, maxJumps } = GameConfig.player.movement;
+    const { boundaries } = GameConfig.world;
+
+    if (this.sprite.body.touching.down) {
+      this.jumpCount = 0;
+      this.sprite.setDragX(groundDrag); // USING CONFIG
+    } else {
+      // OLD BEHAVIOR STRICTLY PRESERVED: Dropping off a ledge consumes first jump instantly!
+      if (this.jumpCount === 0) this.jumpCount = 1; 
+      this.sprite.setDragX(airDrag); // USING CONFIG
+    }
+
+    if (keys) {
+      if (keys.A.isDown) {
+        this.sprite.setAccelerationX(-accelerationRate); // USING CONFIG
+        this.facingDirection = 'LEFT';
+      } else if (keys.D.isDown) {
+        this.sprite.setAccelerationX(accelerationRate); // USING CONFIG
+        this.facingDirection = 'RIGHT';
+      } else {
+        // Instantly halt active force addition if no navigation buttons are held down
+        this.sprite.setAccelerationX(0);
+      }
+
+      if (
+        Phaser.Input.Keyboard.JustDown(keys.W) &&
+        this.jumpCount < maxJumps // USING CONFIG
+      ) {
+        this.sprite.setVelocityY(jumpVelocity); // USING CONFIG
+        this.jumpCount++;
+      }
+    } else {
+      // For autonomous entities (Dummy), zero active internal thrust addition
+      this.sprite.setAccelerationX(0);
+    }
+
+    // --- BOUNDARY ENFORCEMENT VIA CONFIG ---
+    if (
+      this.sprite.y > boundaries.killY ||
+      this.sprite.x < boundaries.minX ||
+      this.sprite.x > boundaries.maxX
+    ) {
+      this.lives--;
+      if (this.lives > 0) {
+        this.respawn(960, 200);
+      }
+    }
+
+    this.renderSkeleton();
+  }
+
+  public takeDamage(amount: number) {
+    if (this.isBlocking) amount = Math.floor(amount * 0.2); // Parry protection
+    this.health -= amount;
+    if (this.health <= 0) {
+        this.lives--;
+        if (this.lives > 0) this.respawn(960, 200);
+    }
+  }
+
+  public respawn(x: number, y: number) {
+    this.health = GameConfig.player.stats.maxHealth; // USING CONFIG
+    this.sprite.setPosition(x, y);
+    this.sprite.setVelocity(0, 0);
+    this.jumpCount = 0;
+  }
+
+  public toggleInvisibility() {
+    this.isInvisible = !this.isInvisible;
+    this.sprite.setAlpha(this.isInvisible ? 0.2 : 1.0);
+  }
+
+  // ---------------------------------------------------------------------------------
+  // ⬇️ PASTE YOUR EXACT ORIGINAL `private renderSkeleton()` CODE BELOW THIS LINE! ⬇️
+  // ---------------------------------------------------------------------------------
+  
+  private renderSkeleton() {
+      // Replace this entire function block with your old procedural drawing code 
+      // so your hands hold the guns and legs move exactly the way you designed them!
+  }
+}
+
+entities/Player.ts:
+import Phaser from 'phaser';
+
+type Joint = { x: number; y: number };
+
+export class Player {
+  public id: string;
+  public teamId: string;
+  public sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
+
+  // --- STEP 2: ADD SKELETON BONE CONFIGURATIONS (THE RIG) ---
+  private skeletonGraphics!: Phaser.GameObjects.Graphics;
+  private readonly spineLength: number = 35;
+  private readonly headRadius: number = 12;
+  // Limb segment lengths (Upper, Lower)
+  private readonly armLen1: number = 22;
+  private readonly armLen2 = 22;
+  private readonly legLen1: number = 28;
+  private readonly legLen2 = 28;
+  // --- STEP 4 RUN CYCLE TRACKING ---
+  private walkTime: number = 0;
+
+  public jumpCount: number = 0;
+  public readonly MAX_JUMPS: number = 2;
+  public facingDirection: 'LEFT' | 'RIGHT' = 'RIGHT';
+
+  public isBlocking: boolean = false;
+  public isInvisible: boolean = false;
+
+  public health: number;
+  public lives: number;
+  private maxHealth: number;
+
+  // --- EASY BALANCE PROPERTIES FOR INERTIAL MOVEMENT ---
+  private readonly maxMoveSpeed: number = 50; // Sprintf top threshold speed limits
+  private readonly accelerationRate: number = 1800; // How fast you ramp up to top speed (px/sec^2)
+  private readonly groundDrag: number = 4400; // Deceleration slide factor when keys are released
+  private readonly airDrag: number = 4400; // Less friction restriction while airborne
+
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    id: string,
+    teamId: string,
+    color: number,
+    maxHealth: number = 100,
+    maxLives: number = 10
+  ) {
+    this.id = id;
+    this.teamId = teamId;
+    this.maxHealth = maxHealth;
+    this.health = maxHealth;
+    this.lives = maxLives;
+
+    const texKey = `player_tex_${color}`;
+    if (!scene.textures.exists(texKey)) {
+      const g = scene.add.graphics();
+      g.fillStyle(color);
+      g.fillRect(0, 0, 70, 70);
+      g.generateTexture(texKey, 70, 70);
+      g.destroy();
+    }
+
+    this.sprite = scene.physics.add.sprite(x, y, texKey);
+    this.sprite.setCollideWorldBounds(false);
+    this.sprite.setData('entity', this);
+
+    this.sprite.setSize(32, 95);
+    // Enforce maximum absolute movement limits so acceleration doesn't scale infinitely
+    this.sprite.setMaxVelocity(this.maxMoveSpeed, 1200);
+
+    // ◄--- ADD THIS LINE: Hides the block image but leaves debug hitbox visible
+    this.sprite.setAlpha(0);
+
+    // ◄--- ADD THIS LINE: Initializes our procedural skeleton graphics layer
+    this.skeletonGraphics = scene.add.graphics();
+  }
+
+  public takeDamage(amount: number) {
+    this.health -= amount;
+    if (this.health <= 0) {
+      this.lives--;
+      if (this.lives > 0) {
+        this.respawn(960, 200);
+      } else {
+        this.sprite.destroy();
+      }
+    }
+  }
+
+  /**
+   * Solves a 2-joint Inverse Kinematics system (Shoulder->Elbow->Hand or Hip->Knee->Foot)
+   * Returns the position of the middle joint (Elbow/Knee).
+   */
+  private solveIK(
+    root: Joint,
+    target: Joint,
+    len1: number,
+    len2: number,
+    flipJoint: boolean
+  ): Joint {
+    const dx = target.x - root.x;
+    const dy = target.y - root.y;
+    let dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Max Reach Constraint: If the target is too far away, clamp it to maximum extension
+    const maxReach = len1 + len2 - 0.1;
+    if (dist > maxReach) {
+      const angle = Math.atan2(dy, dx);
+      target.x = root.x + Math.cos(angle) * maxReach;
+      target.y = root.y + Math.sin(angle) * maxReach;
+      dist = maxReach;
+    }
+
+    // Apply Law of Cosines to extract the internal joint angle
+    const cosAngle =
+      (len1 * len1 + dist * dist - len2 * len2) / (2 * len1 * dist);
+    const innerAngle = Math.acos(Phaser.Math.Clamp(cosAngle, -1, 1));
+    const baseAngle = Math.atan2(dy, dx);
+
+    // Flip joint bend direction depending on structural mapping
+    const finalAngle = flipJoint
+      ? baseAngle - innerAngle
+      : baseAngle + innerAngle;
+
+    return {
+      x: root.x + Math.cos(finalAngle) * len1,
+      y: root.y + Math.sin(finalAngle) * len1,
+    };
+  }
+
+  private renderSkeleton() {
+    const g = this.skeletonGraphics;
+    g.clear();
+
+    const currentAlpha = this.isInvisible ? 0.15 : 1;
+    g.lineStyle(4, 0xffffff, currentAlpha);
+    g.fillStyle(0xffffff, currentAlpha);
+
+    const px = this.sprite.x;
+    const py = this.sprite.y;
+
+    // 1. Central spine structural coordinates
+    const neck = { x: px, y: py - 32 };
+    const pelvis = { x: px, y: py + 3 };
+
+    // Draw Head and Torso Spine
+    g.fillCircle(neck.x, neck.y - this.headRadius, this.headRadius);
+    g.lineBetween(neck.x, neck.y, pelvis.x, pelvis.y);
+
+    const isRight = this.facingDirection === 'RIGHT';
+    const directionSign = isRight ? 1 : -1;
+
+    // 2. ARMS: Dynamic IK Execution
+    const backHandTarget: Joint = {
+      x: neck.x + directionSign * 32,
+      y: neck.y + 14,
+    };
+    const frontHandTarget: Joint = {
+      x: neck.x + directionSign * 45,
+      y: neck.y + 8,
+    };
+
+    const backElbow = this.solveIK(
+      neck,
+      backHandTarget,
+      this.armLen1,
+      this.armLen2,
+      !isRight
+    );
+    g.lineBetween(neck.x, neck.y, backElbow.x, backElbow.y);
+    g.lineBetween(backElbow.x, backElbow.y, backHandTarget.x, backHandTarget.y);
+
+    const frontElbow = this.solveIK(
+      neck,
+      frontHandTarget,
+      this.armLen1,
+      this.armLen2,
+      !isRight
+    );
+    g.lineBetween(neck.x, neck.y, frontElbow.x, frontElbow.y);
+    g.lineBetween(
+      frontElbow.x,
+      frontElbow.y,
+      frontHandTarget.x,
+      frontHandTarget.y
+    );
+
+    // 3. LEGS: Procedural Walk Cycle & Jump Pose Math
+    const groundY = py + 47.5;
+    const vx = this.sprite.body.velocity.x;
+    const vy = this.sprite.body.velocity.y;
+    const isGrounded =
+      this.sprite.body.touching.down || this.sprite.body.blocked.down;
+
+    // Initialize default baseline foot coordinates
+    let leftFootTarget: Joint = { x: pelvis.x - 12, y: groundY };
+    let rightFootTarget: Joint = { x: pelvis.x + 12, y: groundY };
+
+    if (isGrounded) {
+      // GROUNDED RUNNING POSE LOGIC
+      // Advance the walk cycle timeline proportionally to horizontal physics speed
+      if (Math.abs(vx) > 5) {
+        this.walkTime += Math.abs(vx) * 0.0006;
+      }
+
+      // Stride size constraints
+      const strideLength = 16;
+      const stepHeight = 10;
+
+      // Check how fast we are moving relative to average velocity to blend the legs seamlessly
+      const runningIntensity = Phaser.Math.Clamp(Math.abs(vx) / 300, 0, 1);
+
+      // Left Leg Cycle (Phase angle 0)
+      const leftAngle = this.walkTime;
+      const leftXOffset = Math.cos(leftAngle) * strideLength;
+      // Only lift foot on forward swing (when sin is positive)
+      const leftYOffset =
+        Math.sin(leftAngle) > 0 ? -Math.sin(leftAngle) * stepHeight : 0;
+
+      // Right Leg Cycle (Phase offset by PI radians / 180 degrees to alternate footsteps)
+      const rightAngle = this.walkTime + Math.PI;
+      const rightXOffset = Math.cos(rightAngle) * strideLength;
+      const rightYOffset =
+        Math.sin(rightAngle) > 0 ? -Math.sin(rightAngle) * stepHeight : 0;
+
+      // Apply calculated cyclic offsets scaled by current movement intensity
+      leftFootTarget.x += leftXOffset * runningIntensity;
+      leftFootTarget.y += leftYOffset * runningIntensity;
+
+      rightFootTarget.x += rightXOffset * runningIntensity;
+      rightFootTarget.y += rightYOffset * runningIntensity;
+    } else {
+      // AIRBORNE JUMP POSE LOGIC
+      // If flying upward, pull knees up into a compact jumping stance
+      if (vy < 0) {
+        leftFootTarget.y = groundY - 14;
+        leftFootTarget.x = pelvis.x - 6;
+
+        rightFootTarget.y = groundY - 8;
+        rightFootTarget.x = pelvis.x + 4;
+      } else {
+        // If falling downward, extend legs straight down anticipating ground contact
+        leftFootTarget.y = groundY + 4;
+        leftFootTarget.x = pelvis.x - 8;
+
+        rightFootTarget.y = groundY + 4;
+        rightFootTarget.x = pelvis.x + 8;
+      }
+    }
+
+    // Solve for the dynamic Knee coordinate targets using your IK core
+    const leftKnee = this.solveIK(
+      pelvis,
+      leftFootTarget,
+      this.legLen1,
+      this.legLen2,
+      isRight
+    );
+    const rightKnee = this.solveIK(
+      pelvis,
+      rightFootTarget,
+      this.legLen1,
+      this.legLen2,
+      isRight
+    );
+
+    // Draw Left Leg (Hip -> Knee -> Foot)
+    g.lineBetween(pelvis.x, pelvis.y, leftKnee.x, leftKnee.y);
+    g.lineBetween(leftKnee.x, leftKnee.y, leftFootTarget.x, leftFootTarget.y);
+
+    // Draw Right Leg (Hip -> Knee -> Foot)
+    g.lineBetween(pelvis.x, pelvis.y, rightKnee.x, rightKnee.y);
+    g.lineBetween(
+      rightKnee.x,
+      rightKnee.y,
+      rightFootTarget.x,
+      rightFootTarget.y
+    );
+  }
+
+  public applyKnockback(kbX: number, kbY: number) {
+    if (this.isBlocking) {
+      kbX *= 0.2;
+      kbY *= 0.2;
+    }
+    // Temporarily reset acceleration on hit so your inputs don't instantly fight the knockback vector
+    this.sprite.setAccelerationX(0);
+    this.sprite.setVelocity(
+      this.sprite.body.velocity.x + kbX,
+      this.sprite.body.velocity.y + kbY
+    );
+  }
+
+  public toggleInvisibility() {
+    this.isInvisible = !this.isInvisible;
+    this.sprite.setAlpha(this.isInvisible ? 0.15 : 1);
+  }
+
+  public update(keys?: any) {
+    const isGrounded = this.sprite.body.touching.down;
+    if (isGrounded) this.jumpCount = 0;
+    else if (this.jumpCount === 0) this.jumpCount = 1;
+
+    // Dynamic Drag Balancing depending on environment state layers
+    if (isGrounded) {
+      this.sprite.setDragX(this.groundDrag); // Slides cleanly to a stop on solid platforms
+    } else {
+      this.sprite.setDragX(this.airDrag); // Maintains forward horizontal momentum while airborne
+    }
+
+    if (keys) {
+      if (keys.A.isDown) {
+        this.sprite.setAccelerationX(-this.accelerationRate);
+        this.facingDirection = 'LEFT';
+      } else if (keys.D.isDown) {
+        this.sprite.setAccelerationX(this.accelerationRate);
+        this.facingDirection = 'RIGHT';
+      } else {
+        // Instantly halt active force addition if no navigation buttons are held down
+        // The native 'setDragX' engine property takes over and decelerates smoothly!
+        this.sprite.setAccelerationX(0);
+      }
+
+      if (
+        Phaser.Input.Keyboard.JustDown(keys.W) &&
+        this.jumpCount < this.MAX_JUMPS
+      ) {
+        this.sprite.setVelocityY(-850);
+        this.jumpCount++;
+      }
+    } else {
+      // For autonomous entities (Dummy), zero active internal thrust addition
+      this.sprite.setAccelerationX(0);
+    }
+
+    const padding = 150;
+    if (
+      this.sprite.y > 1080 + padding ||
+      this.sprite.x < -padding ||
+      this.sprite.x > 1920 + padding
+    ) {
+      this.lives--;
+      if (this.lives > 0) {
+        this.respawn(960, 200);
+      }
+    }
+
+    this.renderSkeleton();
+  }
+
+  public respawn(x: number, y: number) {
+    this.health = this.maxHealth;
+    this.sprite.setVelocity(0, 0);
+    this.sprite.setAcceleration(0, 0);
+    this.sprite.setPosition(x, y);
+    this.jumpCount = 1;
+    this.isBlocking = false;
+    if (this.isInvisible) this.toggleInvisibility();
+  }
+}
+
+
+
+
+
+entities/weapons/RocketLauncher.ts:
+import { Weapon, IArena } from './Weapon';
+import { Player } from '../Player';
+
+export class RocketLauncher extends Weapon {
+    constructor(scene: IArena) { 
+        super(scene, 8); // 8 is the Config ID for ROCKET LAUNCHER
+    }
+
+    override onPrimary(shooter: Player) {
+        if (this.currentAmmo <= 0) return;
+        
+        const stats = this.config.primary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 800) : -(stats.speed ?? 800);
+        
+        // Standard payload driven by config parameters
+        this.scene.spawnRocket(
+            playerSprite.x, 
+            playerSprite.y, 
+            dirX, 
+            0, 
+            shooter, 
+            stats.kbX ?? 900, 
+            stats.kbY ?? -600, 
+            stats.homing ?? 0, 
+            stats.damage
+        );
+        this.applyHorizontalRecoil(shooter, stats.recoil ?? 300);
+        this.consumeAmmo(1);
+    }
+
+    override onSecondary(shooter: Player) {
+        if (this.currentAmmo <= 0) return;
+        
+        const stats = this.config.secondary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 600) : -(stats.speed ?? 600);
+        
+        // Advanced tracking rocket driven by config parameters
+        this.scene.spawnRocket(
+            playerSprite.x, 
+            playerSprite.y, 
+            dirX, 
+            stats.speedY ?? -200, 
+            shooter, 
+            stats.kbX ?? 800, 
+            stats.kbY ?? -500, 
+            stats.homing ?? 0.05, 
+            stats.damage
+        );
+        this.applyHorizontalRecoil(shooter, stats.recoil ?? 300);
+        this.consumeAmmo(1);
+    }
+}
+
+entities/weapons/Pistol.ts:
+import { Weapon, IArena } from './Weapon';
+import { Player } from '../Player';
+
+export class Pistol extends Weapon {
+    constructor(scene: IArena) { 
+        super(scene, 0); // 0 is the Config ID for PISTOL
+    }
+
+    override onPrimary(shooter: Player) {
+        if (this.currentAmmo <= 0) return;
+        
+        const stats = this.config.primary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 1200) : -(stats.speed ?? 1200);
+        
+        // Straight shot driven by config
+        this.scene.spawnProjectile(
+            playerSprite.x, 
+            playerSprite.y + 10, 
+            dirX, 
+            0, 
+            'bullet_tex', 
+            false, 
+            shooter, 
+            stats.kbX ?? 400, 
+            stats.kbY ?? -100, 
+            stats.damage
+        );
+        this.applyHorizontalRecoil(shooter, stats.recoil ?? 150); 
+        this.consumeAmmo(1);
+    }
+
+    override onSecondary(shooter: Player) {
+        const stats = this.config.secondary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 800) : -(stats.speed ?? 800);
+        
+        // Thrown empty pistol weapon frame arc payload driven by config
+        this.scene.spawnProjectile(
+            playerSprite.x, 
+            playerSprite.y, 
+            dirX, 
+            0, 
+            'pistol_thrown_tex', 
+            true, 
+            shooter, 
+            stats.kbX ?? 600, 
+            stats.kbY ?? -200, 
+            stats.damage
+        );
+        this.currentAmmo = 0; 
+        this.triggerReload(2000); 
+    }
+}
+
+entities/weapons/Umbrella.ts:
+import { Weapon, IArena } from './Weapon';
+import { Player } from '../Player';
+
+export class Umbrella extends Weapon {
+    constructor(scene: IArena) { 
+        super(scene, 5); // 5 is the Config ID for UMBRELLA
+    }
+
+    override onPrimary(shooter: Player) {
+        const stats = this.config.primary;
+        const playerSprite = shooter.sprite;
+        
+        // Melee impact check driven by configuration numbers
+        this.scene.spawnMeleeSlash(
+            playerSprite.x, 
+            playerSprite.y, 
+            shooter.facingDirection, 
+            shooter, 
+            stats.kbX ?? 300, 
+            stats.kbY ?? -300, 
+            stats.damage
+        );
+    }
+
+    override onSecondary(shooter: Player) {
+        // Enforce active damage reduction bounds via an engine-timed cycle
+        shooter.isBlocking = true;
+        this.scene.addTimer(1000, () => {
+            shooter.isBlocking = false;
+        });
+    }
+}
+
+entities/weapons/Sniper.ts:
+import { Weapon, IArena } from './Weapon';
+import { Player } from '../Player';
+
+export class Sniper extends Weapon {
+    constructor(scene: IArena) { 
+        super(scene, 4); // 4 is the Config ID for SNIPER
+    }
+
+    override onPrimary(shooter: Player) {
+        if (this.currentAmmo <= 0) return;
+        
+        const stats = this.config.primary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 2500) : -(stats.speed ?? 2500);
+        
+        // High-velocity armor piercing round driven by configuration parameters
+        this.scene.spawnProjectile(
+            playerSprite.x, 
+            playerSprite.y, 
+            dirX, 
+            0, 
+            'bullet_tex', 
+            false, 
+            shooter, 
+            stats.kbX ?? 800, 
+            stats.kbY ?? -200, 
+            stats.damage
+        );
+        this.applyHorizontalRecoil(shooter, stats.recoil ?? 300); 
+        this.consumeAmmo(1);
+        
+        // Force break invisibility parameters upon generating dynamic combat signatures
+        if (shooter.isInvisible && typeof shooter.toggleInvisibility === 'function') {
+            shooter.toggleInvisibility();
+        }
+    }
+
+    override onSecondary(shooter: Player) {
+        // Triggers safe tactical cloaking mechanism loops
+        if (typeof shooter.toggleInvisibility === 'function') {
+            shooter.toggleInvisibility();
+        }
+    }
+}
+
+entities/weapons/Shotgun.ts:
+import { Weapon, IArena } from './Weapon';
+import { Player } from '../Player';
+
+export class Shotgun extends Weapon {
+    constructor(scene: IArena) { 
+        super(scene, 6); // 6 is the Config ID for SHOTGUN
+    }
+
+    override onPrimary(shooter: Player) {
+        if (this.currentAmmo < 1) return;
+        const dir = shooter.facingDirection === 'RIGHT' ? 1 : -1;
+        const stats = this.config.primary;
+
+        const pellets = stats.pellets ?? 3;
+        const spreadRange = stats.spread ?? 150;
+        const speed = stats.speed ?? 1000;
+
+        // Automatically space out pellets symmetrically over your chosen spread limit
+        for (let i = 0; i < pellets; i++) {
+            let vy = 0;
+            if (pellets > 1) {
+                vy = -spreadRange + (spreadRange * 2 / (pellets - 1)) * i;
+            }
+            this.scene.spawnProjectile(
+                shooter.sprite.x, 
+                shooter.sprite.y, 
+                speed * dir, 
+                vy, 
+                'bullet_tex', 
+                false, 
+                shooter, 
+                stats.kbX ?? 200, 
+                stats.kbY ?? -50, 
+                stats.damage
+            );
+        }
+
+        this.applyHorizontalRecoil(shooter, stats.recoil ?? 250); 
+        this.consumeAmmo(1);
+    }
+
+    override onSecondary(shooter: Player) {
+        if (this.currentAmmo < 2) return;
+        const dir = shooter.facingDirection === 'RIGHT' ? 1 : -1;
+        const stats = this.config.secondary;
+
+        const pellets = stats.pellets ?? 5;
+        const spreadRange = stats.spread ?? 300;
+        const speed = stats.speed ?? 1200;
+
+        // Symmetrical spacing for heavy secondary burst configuration
+        for (let i = 0; i < pellets; i++) {
+            let vy = 0;
+            if (pellets > 1) {
+                vy = -spreadRange + (spreadRange * 2 / (pellets - 1)) * i;
+            }
+            this.scene.spawnProjectile(
+                shooter.sprite.x, 
+                shooter.sprite.y, 
+                speed * dir, 
+                vy, 
+                'bullet_tex', 
+                false, 
+                shooter, 
+                stats.kbX ?? 300, 
+                stats.kbY ?? -100, 
+                stats.damage
+            );
+        }
+
+        this.applyHorizontalRecoil(shooter, stats.recoil ?? 400); 
+        this.consumeAmmo(2);
+    }
+}
+
+entities/weapons/Weapon.ts:
+import { Player } from '../Player';
+import { GameConfig } from '../../config/ConfigManager';
+import { WeaponBlueprint } from '../../config/WeaponConfig';
+
+export interface IArena {
+  spawnProjectile(
+    x: number,
+    y: number,
+    velocityX: number,
+    velocityY: number,
+    texture: string,
+    hasGravity: boolean,
+    shooter: Player,
+    kbX: number,
+    kbY: number,
+    damage: number
+  ): void;
+  spawnBomb(
+    x: number,
+    y: number,
+    velocityX: number,
+    velocityY: number,
+    isSolid: boolean,
+    shooter: Player,
+    kbX: number,
+    kbY: number,
+    damage: number
+  ): void;
+  spawnMeleeSlash(
+    x: number,
+    y: number,
+    facing: 'LEFT' | 'RIGHT',
+    shooter: Player,
+    kbX: number,
+    kbY: number,
+    damage: number
+  ): void;
+  spawnRocket(
+    x: number,
+    y: number,
+    velocityX: number,
+    velocityY: number,
+    shooter: Player,
+    kbX: number,
+    kbY: number,
+    homingStrength: number,
+    damage: number
+  ): void;
+
+  updateAmmoUI(text: string): void;
+  getTime(): number;
+  addTimer(delay: number, callback: () => void, repeat?: number): void;
+}
+
+export abstract class Weapon {
+  public id: number;
+  public name: string;
+  public maxAmmo: number;
+  public currentAmmo: number;
+  public isReloading: boolean = false;
+
+  public config: WeaponBlueprint;
+
+  protected scene: IArena;
+  protected primaryCooldown: number;
+  protected secondaryCooldown: number;
+  protected lastPrimary: number = 0;
+  protected lastSecondary: number = 0;
+
+  /**
+   * Refactored to read configuration parameters cleanly out of GameConfig memory.
+   * Allows live mods and runtime adjustments without mutating asset files!
+   */
+  constructor(scene: IArena, weaponId: number) {
+    this.scene = scene;
+
+    const weaponStats: WeaponBlueprint = GameConfig.weapons[weaponId]!;
+    if (!weaponStats) {
+      throw new Error(
+        `Weapon Initialization Panic: ID ${weaponId} is missing from configuration registries.`
+      );
+    }
+
+    this.config = weaponStats;
+    this.id = weaponId;
+    this.name = weaponStats.name;
+    this.maxAmmo = weaponStats.maxAmmo;
+    this.currentAmmo = weaponStats.maxAmmo;
+    this.primaryCooldown = weaponStats.primaryCooldown;
+    this.secondaryCooldown = weaponStats.secondaryCooldown;
+  }
+
+  public abstract onPrimary(shooter: Player): void;
+  public abstract onSecondary(shooter: Player): void;
+
+  public primaryAttack(shooter: Player) {
+    if (
+      this.isReloading ||
+      this.currentAmmo <= 0 ||
+      this.scene.getTime() < this.lastPrimary
+    )
+      return;
+    this.lastPrimary = this.scene.getTime() + this.primaryCooldown;
+    this.onPrimary(shooter);
+  }
+
+  public secondaryAttack(shooter: Player) {
+    if (
+      this.isReloading ||
+      this.currentAmmo <= 0 ||
+      this.scene.getTime() < this.lastSecondary
+    )
+      return;
+    this.lastSecondary = this.scene.getTime() + this.secondaryCooldown;
+    this.onSecondary(shooter);
+  }
+
+  public triggerReload(duration: number = 1200) {
+    // Safety exit check: Fallback defaults with Infinity capacity cannot enter reload sequences
+    if (this.isReloading || this.maxAmmo === Infinity) return;
+
+    this.isReloading = true;
+    this.scene.updateAmmoUI(`${this.name}: RELOADING...`);
+
+    this.scene.addTimer(duration, () => {
+      this.currentAmmo = this.maxAmmo;
+      this.isReloading = false;
+      this.updateUI();
+    });
+  }
+
+  protected consumeAmmo(amount: number = 1) {
+    if (this.maxAmmo === Infinity) return;
+    this.currentAmmo -= amount;
+    this.updateUI();
+    if (this.currentAmmo <= 0) this.triggerReload();
+  }
+
+  public updateUI() {
+    const ammoStr = this.maxAmmo === Infinity ? '∞' : this.currentAmmo;
+    this.scene.updateAmmoUI(
+      `${this.name}: ${ammoStr} / ${this.maxAmmo === Infinity ? '∞' : this.maxAmmo}`
+    );
+  }
+
+  protected applyHorizontalRecoil(shooter: Player, force: number) {
+    if (!shooter.sprite || !shooter.sprite.body) return;
+    const knockbackDirection = shooter.facingDirection === 'RIGHT' ? -1 : 1;
+    shooter.sprite.setVelocityX(
+      shooter.sprite.body.velocity.x + force * knockbackDirection
+    );
+  }
+}
+
+
+entities/weapons/Uzi.ts:
+import Phaser from 'phaser';
+import { Weapon, IArena } from './Weapon';
+import { Player } from '../Player';
+
+export class Uzi extends Weapon {
+    constructor(scene: IArena) { 
+        super(scene, 9); // 9 is the Config ID for UZI
+    }
+
+    override onPrimary(shooter: Player) {
+        if (this.isReloading || this.currentAmmo <= 0) return;
+        
+        const stats = this.config.primary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 1200) : -(stats.speed ?? 1200);
+
+        // Straight-shot spray mechanics driven by config numbers
+        this.scene.spawnProjectile(
+            playerSprite.x, 
+            playerSprite.y + 10, 
+            dirX, 
+            0, 
+            'bullet_tex', 
+            false, 
+            shooter, 
+            stats.kbX ?? 80, 
+            stats.kbY ?? -20, 
+            stats.damage
+        );
+        this.applyHorizontalRecoil(shooter, stats.recoil ?? 40); 
+        this.consumeAmmo(1);
+    }
+
+    override onSecondary(shooter: Player) {
+        if (this.isReloading || this.currentAmmo <= 0) return;
+        
+        const stats = this.config.secondary;
+        const playerSprite = shooter.sprite;
+        const dir = shooter.facingDirection === 'RIGHT' ? 1 : -1;
+        
+        // Grab spread threshold out of configuration or fallback safely
+        const spreadRange = stats.spread ?? 300;
+        const randomVy = Phaser.Math.Between(-spreadRange, spreadRange);
+        const speed = stats.speed ?? 1000;
+        
+        // Wild angled cone projectiles driven by config numbers
+        this.scene.spawnProjectile(
+            playerSprite.x, 
+            playerSprite.y + 10, 
+            speed * dir, 
+            randomVy, 
+            'bullet_tex', 
+            false, 
+            shooter, 
+            stats.kbX ?? 100, 
+            stats.kbY ?? -40, 
+            stats.damage
+        );
+        this.applyHorizontalRecoil(shooter, stats.recoil ?? 40); 
+        this.consumeAmmo(1);
+    }
+}
+
+entities/weapons/MachineGun.ts:
+import { Weapon, IArena } from './Weapon';
+import { Player } from '../Player';
+
+export class MachineGun extends Weapon {
+    constructor(scene: IArena) { 
+        super(scene, 7); // 7 is the Config ID for MACHINE GUN
+    }
+
+    override onPrimary(shooter: Player) {
+        if (this.currentAmmo <= 0) return;
+        
+        const stats = this.config.primary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 1600) : -(stats.speed ?? 1600);
+        
+        // Sustained heavy suppression rounds driven by config parameters
+        this.scene.spawnProjectile(
+            playerSprite.x, 
+            playerSprite.y + 10, 
+            dirX, 
+            0, 
+            'bullet_tex', 
+            false, 
+            shooter, 
+            stats.kbX ?? 120, 
+            stats.kbY ?? -50, 
+            stats.damage
+        );
+        this.applyHorizontalRecoil(shooter, stats.recoil ?? 60); 
+        this.consumeAmmo(1);
+    }
+
+    override onSecondary(shooter: Player) {
+        const stats = this.config.secondary;
+        const playerSprite = shooter.sprite;
+        
+        // Heavy rifle stock butt-strike driven by config
+        this.scene.spawnMeleeSlash(
+            playerSprite.x, 
+            playerSprite.y, 
+            shooter.facingDirection, 
+            shooter, 
+            stats.kbX ?? 400, 
+            stats.kbY ?? -100, 
+            stats.damage
+        );
+    }
+}
+
+entities/weapons/SMG.ts:
+import { Weapon, IArena } from './Weapon';
+import { Player } from '../Player';
+
+export class SMG extends Weapon {
+    constructor(scene: IArena) { 
+        super(scene, 1); // 1 is the Config ID for SMG
+    }
+
+    override onPrimary(shooter: Player) {
+        if (this.currentAmmo <= 0) return;
+        
+        const stats = this.config.primary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 1400) : -(stats.speed ?? 1400);
+        
+        // Fast, light bullets driven by configuration
+        this.scene.spawnProjectile(
+            playerSprite.x, 
+            playerSprite.y + 10, 
+            dirX, 
+            0, 
+            'bullet_tex', 
+            false, 
+            shooter, 
+            stats.kbX ?? 90, 
+            stats.kbY ?? -40, 
+            stats.damage
+        );
+        this.applyHorizontalRecoil(shooter, stats.recoil ?? 90); 
+        this.consumeAmmo(1);
+    }
+
+    override onSecondary(shooter: Player) {
+        if (this.currentAmmo < 3) return; 
+        
+        const stats = this.config.secondary;
+        const speed = stats.speed ?? 1800;
+        const damage = stats.damage;
+        const kbX = stats.kbX ?? 140;
+        const kbY = stats.kbY ?? -80;
+        const recoil = stats.recoil ?? 150;
+
+        // Fire a rhythmic burst pattern using the framework timer hook
+        this.scene.addTimer(80, () => {
+            if (this.currentAmmo > 0 && !this.isReloading) {
+                const playerSprite = shooter.sprite;
+                const dirX = shooter.facingDirection === 'RIGHT' ? speed : -speed;
+                
+                this.scene.spawnProjectile(
+                    playerSprite.x, 
+                    playerSprite.y + 10, 
+                    dirX, 
+                    0, 
+                    'bullet_tex', 
+                    false, 
+                    shooter, 
+                    kbX, 
+                    kbY, 
+                    damage
+                );
+                this.applyHorizontalRecoil(shooter, recoil);
+                this.consumeAmmo(1);
+            }
+        }, 3); // Executes exactly three burst passes
+    }
+}
+
+entities/weapons/Knife.ts:
+import { Weapon, IArena } from './Weapon';
+import { Player } from '../Player';
+
+export class Knife extends Weapon {
+    constructor(scene: IArena) { 
+        super(scene, 2); // 2 is the Config ID for KNIFE
+    }
+
+    override onPrimary(shooter: Player) {
+        const stats = this.config.primary;
+        const playerSprite = shooter.sprite;
+        
+        // Melee slash sweep driven by config
+        this.scene.spawnMeleeSlash(
+            playerSprite.x, 
+            playerSprite.y, 
+            shooter.facingDirection, 
+            shooter, 
+            stats.kbX ?? 300, 
+            stats.kbY ?? -200, 
+            stats.damage
+        );
+    }
+
+    override onSecondary(shooter: Player) {
+        const stats = this.config.secondary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 1000) : -(stats.speed ?? 1000);
+        
+        // Ballistic thrown dagger arc driven by config
+        this.scene.spawnProjectile(
+            playerSprite.x, 
+            playerSprite.y, 
+            dirX, 
+            0, 
+            'knife_tex', 
+            true, 
+            shooter, 
+            stats.kbX ?? 400, 
+            stats.kbY ?? -150, 
+            stats.damage
+        );
+    }
+}
+
+entities/weapons/Bomb.ts:
+import { Weapon, IArena } from './Weapon';
+import { Player } from '../Player';
+import { GameConfig } from '../../config/ConfigManager';
+
+export class BombWeapon extends Weapon {
+    constructor(scene: IArena) { 
+        super(scene, 3); // 3 is the Config ID for BOMB
+    }
+
+    override onPrimary(shooter: Player) {
+        if (this.currentAmmo <= 0) return;
+        
+        const stats = this.config.primary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 400) : -(stats.speed ?? 400);
+        
+        // Standard high explosive bouncing mine driven by config
+        this.scene.spawnBomb(
+            playerSprite.x, 
+            playerSprite.y - 20, 
+            dirX, 
+            stats.speedY ?? -500, 
+            stats.isSolid ?? true, 
+            shooter, 
+            stats.kbX ?? 800, 
+            stats.kbY ?? -700, 
+            stats.damage
+        );
+        this.consumeAmmo(1);
+    }
+
+    override onSecondary(shooter: Player) {
+        if (this.currentAmmo <= 0) return;
+        
+        const stats = this.config.secondary;
+        const playerSprite = shooter.sprite;
+        const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 200) : -(stats.speed ?? 200);
+        
+        // Phasing phantom proximity blast capsule driven by config
+        this.scene.spawnBomb(
+            playerSprite.x, 
+            playerSprite.y - 20, 
+            dirX, 
+            stats.speedY ?? 100, 
+            stats.isSolid ?? false, 
+            shooter, 
+            stats.kbX ?? 600, 
+            stats.kbY ?? -500, 
+            stats.damage
+        );
+        this.consumeAmmo(1);
+    }
+}
+
+scenes/SettingsScene.ts:
+import Phaser from 'phaser';
+
+export class SettingsScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'SettingsScene' });
+    }
+
+    create() {
+        const { width, height } = this.cameras.main;
+
+        this.add.text(width / 2, height * 0.4, 'STORY MODE', {
+            fontSize: '48px',
+            fontFamily: 'monospace',
+            color: '#ffffff',
+            letterSpacing: 4
+        }).setOrigin(0.5);
+
+        const backBtn = this.add.text(width / 2, height * 0.6, '< BACK TO MENU', {
+            fontSize: '24px',
+            fontFamily: 'monospace',
+            color: '#ff4500'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
+        backBtn.on('pointerout', () => backBtn.setColor('#ff4500'));
+        backBtn.on('pointerup', () => this.scene.start('MainMenuScene'));
+    }
+}
+
+scenes/ArenaScene.ts:
+import Phaser from 'phaser';
+import { Player } from '../entities/Player';
+import { IArena, Weapon } from '../entities/weapons/Weapon';
+import { Pistol } from '../entities/weapons/Pistol';
+import { SMG } from '../entities/weapons/SMG';
+import { Knife } from '../entities/weapons/Knife';
+import { BombWeapon } from '../entities/weapons/Bomb';
+import { Sniper } from '../entities/weapons/Sniper';
+import { Umbrella } from '../entities/weapons/Umbrella';
+import { Shotgun } from '../entities/weapons/Shotgun';
+import { MachineGun } from '../entities/weapons/MachineGun';
+import { RocketLauncher } from '../entities/weapons/RocketLauncher';
+import { Uzi } from '../entities/weapons/Uzi';
+import { MAP_REGISTRY, IMapData } from '../config/MapConfig';
+
+// Define ammo/durability rules for crates (Index 0 is Pistol, handled as infinite)
+const AMMO_CONFIG: Record<number, number> = {
+  1: 30, // SMG (bullets)
+  2: 5, // Knife (throws)
+  3: 3, // Bomb (bombs)
+  4: 5, // Sniper (bullets)
+  5: 100, // Umbrella (health capacity)
+  6: 8, // Shotgun (blasts)
+  7: 50, // MachineGun (bullets)
+  8: 4, // Rocket Launcher (rockets)
+  9: 40, // Uzi (bullets)
+};
+
+export class ArenaScene extends Phaser.Scene implements IArena {
+  private player1!: Player;
+  public dummy!: Player;
+  private playersGroup!: Phaser.Physics.Arcade.Group;
+
+  private platforms!: Phaser.Physics.Arcade.StaticGroup;
+  private crates!: Phaser.Physics.Arcade.StaticGroup; // New crates group
+
+  private projectiles!: Phaser.Physics.Arcade.Group;
+  private rockets!: Phaser.Physics.Arcade.Group;
+  private solidBombs!: Phaser.Physics.Arcade.Group;
+  private meleeSlashes!: Phaser.Physics.Arcade.Group;
+
+  private keys!: any;
+  private scoreText!: Phaser.GameObjects.Text;
+
+  // Single instances of weapons to route logic
+  private weapons: Weapon[] = [];
+
+  // Independent Player States
+  private p1WeaponIndex: number = 0;
+  private p1Ammo: number = -1; // -1 represents infinite (Pistol)
+
+  private dummyWeaponIndex: number = 0;
+  private dummyAmmo: number = -1;
+
+  private activeMapConfig!: IMapData;
+  private currentMapId: string = 'classic';
+
+  constructor() {
+    super({ key: 'ArenaScene' });
+  }
+
+  create() {
+    this.platforms = this.physics.add.staticGroup();
+    this.crates = this.physics.add.staticGroup();
+    this.playersGroup = this.physics.add.group();
+
+    this.projectiles = this.physics.add.group();
+    this.rockets = this.physics.add.group();
+    this.solidBombs = this.physics.add.group();
+    this.meleeSlashes = this.physics.add.group();
+
+    this.buildMap(this.currentMapId);
+
+    const spawnPoints = this.activeMapConfig.spawnPoints;
+    this.player1 = new Player(
+      this,
+      spawnPoints.player1.x,
+      spawnPoints.player1.y,
+      'p1',
+      'team_A',
+      0xff4500,
+      100,
+      10
+    );
+    this.dummy = new Player(
+      this,
+      spawnPoints.dummy.x,
+      spawnPoints.dummy.y,
+      'dummy',
+      'team_B',
+      0x0088ff,
+      100,
+      10
+    );
+
+    this.playersGroup.add(this.player1.sprite);
+    this.playersGroup.add(this.dummy.sprite);
+
+    // Asset Generation
+    this.generateTexture('bullet_tex', 20, 8, 0xffd700);
+    this.generateTexture('pistol_thrown_tex', 30, 20, 0x555555);
+    this.generateTexture('knife_tex', 40, 10, 0xcccccc);
+    this.generateTexture('bomb_tex', 30, 30, 0xff0000);
+    this.generateTexture('rocket_tex', 40, 15, 0xff8800);
+    this.generateTexture('slash_tex', 60, 60, 0xffffff);
+    this.generateTexture('crate_tex', 32, 32, 0xd2b48c); // Supply Crate
+
+    // Colliders & Overlaps
+    this.physics.add.collider(
+      this.playersGroup,
+      this.platforms,
+      undefined,
+      this.oneWayCallback,
+      this
+    );
+    this.physics.add.collider(
+      this.solidBombs,
+      this.platforms,
+      undefined,
+      (bomb: any) => !bomb.getData('isGhostBomb'),
+      this
+    );
+
+    // Crate Pickup Overlap
+    this.physics.add.overlap(this.playersGroup, this.crates, (p, c) =>
+      this.handleCratePickup(p, c)
+    );
+
+    this.physics.add.overlap(this.playersGroup, this.projectiles, (p, proj) =>
+      this.handleHit(p, proj)
+    );
+    this.physics.add.overlap(this.playersGroup, this.rockets, (p, r) =>
+      this.handleHit(p, r, true)
+    );
+    this.physics.add.overlap(this.playersGroup, this.solidBombs, (p, bomb) =>
+      this.handleHit(p, bomb)
+    );
+    this.physics.add.overlap(this.playersGroup, this.meleeSlashes, (p, slash) =>
+      this.handleHit(p, slash, false)
+    );
+
+    this.scoreText = this.add.text(50, 50, '', {
+      fontSize: '24px',
+      color: '#818384',
+      fontFamily: 'sans-serif',
+    });
+
+    this.weapons = [
+      new Pistol(this),
+      new SMG(this),
+      new Knife(this),
+      new BombWeapon(this),
+      new Sniper(this),
+      new Umbrella(this),
+      new Shotgun(this),
+      new MachineGun(this),
+      new RocketLauncher(this),
+      new Uzi(this),
+    ];
+
+    // Equip default pistols
+    this.giveWeaponToPlayer(this.player1, 0);
+    this.giveWeaponToPlayer(this.dummy, 0);
+
+    this.keys = this.input.keyboard!.addKeys(
+      'W,A,S,D,T,Y,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE,ZERO'
+    ) as any;
+
+    // Start Supply Drop Loop (spawns every 6 seconds)
+    this.time.addEvent({
+      delay: 6000,
+      callback: this.spawnCrate,
+      callbackScope: this,
+      loop: true,
+    });
+
+    // Add this inside ArenaScene's create() method:
+    const quitBtn = this.add
+      .text(20, 20, 'QUIT TO MENU', {
+        fontSize: '20px',
+        fontFamily: 'monospace',
+        color: '#ffffff',
+        backgroundColor: '#ff3333',
+        padding: { x: 10, y: 5 },
+      })
+      .setInteractive({ useHandCursor: true })
+      .setScrollFactor(0) // Keeps the button glued to the camera so it doesn't move away
+      .setDepth(100); // Keeps it rendered above the stickman
+
+    quitBtn.on('pointerup', () => {
+      // Tells the Scene Manager to shut down the arena and boot the menu
+      this.scene.start('MainMenuScene');
+    });
+  }
+
+  public buildMap(mapId: string) {
+    const config = MAP_REGISTRY[mapId];
+    if (!config) return;
+    this.currentMapId = mapId;
+    this.activeMapConfig = config;
+    this.platforms.clear(true, true);
+
+    config.platforms.forEach((plat) => {
+      this.createPlatform(plat.x, plat.y, plat.width, plat.height, plat.color);
+    });
+
+    if (this.player1 && this.dummy) {
+      this.player1.sprite.setPosition(
+        config.spawnPoints.player1.x,
+        config.spawnPoints.player1.y
+      );
+      this.dummy.sprite.setPosition(
+        config.spawnPoints.dummy.x,
+        config.spawnPoints.dummy.y
+      );
+    }
+  }
+
+  // --- CRATE & WEAPON MANAGEMENT ---
+
+  private spawnCrate() {
+    // Clear any existing unclaimed crates from the map first
+    this.crates.clear(true, true);
+
+    const platforms = this.activeMapConfig.platforms;
+    if (!platforms || platforms.length === 0) return;
+
+    // Pick a random platform
+    const plat = Phaser.Utils.Array.GetRandom(platforms);
+
+    // Calc valid boundaries on top of the platform
+    const minX = plat.x - plat.width / 2 + 16;
+    const maxX = plat.x + plat.width / 2 - 16;
+
+    const spawnX = Phaser.Math.Between(minX, maxX);
+    const spawnY = plat.y - plat.height / 2 - 16; // Rest perfectly on top
+
+    this.crates.create(spawnX, spawnY, 'crate_tex');
+  }
+
+  private handleCratePickup(pSprite: any, crateSprite: any) {
+    crateSprite.destroy(); // Consume crate
+    const player = pSprite.getData('entity') as Player;
+
+    // Give random crate weapon (Indices 1 through 9)
+    const randomWepIndex = Phaser.Math.Between(1, 9);
+    this.giveWeaponToPlayer(player, randomWepIndex);
+  }
+
+  private giveWeaponToPlayer(player: Player, index: number) {
+    const ammo = index === 0 ? -1 : (AMMO_CONFIG[index] as number);
+
+    if (player.id === this.player1.id) {
+      this.p1WeaponIndex = index;
+      this.p1Ammo = ammo;
+    } else {
+      this.dummyWeaponIndex = index;
+      this.dummyAmmo = ammo;
+    }
+    this.weapons[index]?.updateUI(); // Optional hook for UI updates
+  }
+
+  private consumeAmmo(shooter: Player, amount: number) {
+    if (shooter.id === this.player1.id && this.p1WeaponIndex !== 0) {
+      this.p1Ammo -= amount;
+      if (this.p1Ammo <= 0) this.giveWeaponToPlayer(shooter, 0); // Revert to Pistol
+    } else if (shooter.id === this.dummy.id && this.dummyWeaponIndex !== 0) {
+      this.dummyAmmo -= amount;
+      if (this.dummyAmmo <= 0) this.giveWeaponToPlayer(shooter, 0);
+    }
+  }
+
+  // --- COMBAT LOGIC ---
+
+  private handleHit(pSprite: any, hazard: any, destroyHazard: boolean = true) {
+    const player = pSprite.getData('entity') as Player;
+    const shooterId = hazard.getData('shooterId');
+    const damage = hazard.getData('damage');
+
+    if (player.id === shooterId || player.teamId === hazard.getData('teamId'))
+      return;
+
+    // Umbrella Block Interception
+    if (player.isBlocking && !hazard.getData('isExplosive')) {
+      const attackFromRight = hazard.x > player.sprite.x;
+      if (
+        (attackFromRight && player.facingDirection === 'RIGHT') ||
+        (!attackFromRight && player.facingDirection === 'LEFT')
+      ) {
+        // Damage Umbrella Health directly if blocked
+        const wepIndex =
+          player.id === this.player1.id
+            ? this.p1WeaponIndex
+            : this.dummyWeaponIndex;
+        if (wepIndex === 5) {
+          this.consumeAmmo(player, damage); // umbrella breaks if ammo reaches 0
+        }
+
+        if (destroyHazard) hazard.destroy();
+        return;
+      }
+    }
+
+    player.takeDamage(damage);
+    player.applyKnockback(hazard.getData('kbX'), hazard.getData('kbY'));
+
+    if (destroyHazard) {
+      if (hazard.getData('isExplosive')) this.detonateExplosive(hazard);
+      else hazard.destroy();
+    }
+  }
+
+  private detonateExplosive(entity: any) {
+    if (!entity.active) return;
+    this.spawnMeleeSlash(entity.x, entity.y, 'RIGHT', this.player1, 0, 0, 0);
+    entity.destroy();
+  }
+
+  getTime() {
+    return this.time.now;
+  }
+  addTimer(delay: number, callback: () => void, repeat: number = 0) {
+    this.time.addEvent({ delay, callback, repeat });
+  }
+  updateAmmoUI(text: string) {}
+
+  // --- SPAWNERS (Auto-consume ammo upon firing) ---
+
+  spawnProjectile(
+    x: number,
+    y: number,
+    velocityX: number,
+    velocityY: number,
+    texture: string,
+    hasGravity: boolean,
+    shooter: Player,
+    kbX: number,
+    kbY: number,
+    damage: number
+  ) {
+    const proj = this.projectiles.create(
+      x,
+      y,
+      texture
+    ) as Phaser.Physics.Arcade.Sprite;
+    (proj.body as any).allowGravity = hasGravity;
+    proj.setVelocity(velocityX, velocityY);
+    proj.setData('shooterId', shooter.id);
+    proj.setData('teamId', shooter.teamId);
+    proj.setData('kbX', shooter.facingDirection === 'RIGHT' ? kbX : -kbX);
+    proj.setData('kbY', kbY);
+    proj.setData('damage', damage);
+    proj.setData('isExplosive', false);
+
+    // Consume Ammo (Works perfectly for guns & Knife Throws)
+    this.consumeAmmo(shooter, 1);
+  }
+
+  spawnRocket(
+    x: number,
+    y: number,
+    velocityX: number,
+    velocityY: number,
+    shooter: Player,
+    kbX: number,
+    kbY: number,
+    homingStrength: number,
+    damage: number
+  ) {
+    const r = this.rockets.create(
+      x,
+      y,
+      'rocket_tex'
+    ) as Phaser.Physics.Arcade.Sprite;
+    (r.body as any).allowGravity = false;
+    r.setVelocity(velocityX, velocityY);
+    r.setData('shooterId', shooter.id);
+    r.setData('teamId', shooter.teamId);
+    r.setData('kbX', shooter.facingDirection === 'RIGHT' ? kbX : -kbX);
+    r.setData('kbY', kbY);
+    r.setData('damage', damage);
+    r.setData('isExplosive', true);
+    r.setData('homingStrength', homingStrength);
+
+    this.consumeAmmo(shooter, 1);
+    this.time.delayedCall(2500, () => this.detonateExplosive(r));
+  }
+
+  spawnBomb(
+    x: number,
+    y: number,
+    velocityX: number,
+    velocityY: number,
+    isSolid: boolean,
+    shooter: Player,
+    kbX: number,
+    kbY: number,
+    damage: number
+  ) {
+    const bomb = this.solidBombs.create(
+      x,
+      y,
+      'bomb_tex'
+    ) as Phaser.Physics.Arcade.Sprite;
+    (bomb.body as any).allowGravity = true;
+    bomb.setBounce(0.5);
+    bomb.setDrag(100, 0);
+    bomb.setVelocity(velocityX, velocityY);
+    bomb.setData('shooterId', shooter.id);
+    bomb.setData('teamId', shooter.teamId);
+    bomb.setData('kbX', shooter.facingDirection === 'RIGHT' ? kbX : -kbX);
+    bomb.setData('kbY', kbY);
+    bomb.setData('damage', damage);
+    bomb.setData('isExplosive', true);
+    bomb.setData('isGhostBomb', !isSolid);
+
+    this.consumeAmmo(shooter, 1);
+    this.time.delayedCall(2000, () => {
+      if (bomb.active) this.detonateExplosive(bomb);
+    });
+  }
+
+  spawnMeleeSlash(
+    x: number,
+    y: number,
+    facing: 'LEFT' | 'RIGHT',
+    shooter: Player,
+    kbX: number,
+    kbY: number,
+    damage: number
+  ) {
+    const offset = facing === 'RIGHT' ? 50 : -50;
+    const slash = this.meleeSlashes.create(
+      x + offset,
+      y,
+      'slash_tex'
+    ) as Phaser.Physics.Arcade.Sprite;
+    (slash.body as any).allowGravity = false;
+    slash.setAlpha(0.8);
+    slash.setData('shooterId', shooter.id);
+    slash.setData('teamId', shooter.teamId);
+    slash.setData('kbX', facing === 'RIGHT' ? kbX : -kbX);
+    slash.setData('kbY', kbY);
+    slash.setData('damage', damage);
+    slash.setData('isExplosive', false);
+
+    // Notice we DO NOT consume ammo here! This keeps Knife Primary and Umbrella Primary strictly infinite!
+    this.tweens.add({
+      targets: slash,
+      alpha: 0,
+      duration: 150,
+      onComplete: () => slash.destroy(),
+    });
+  }
+
+  // --- GAME LOOP ---
+
+  override update(time: number) {
+    this.player1.update(this.keys);
+    this.dummy.update();
+
+    if (this.player1.sprite.y > this.activeMapConfig.deathY)
+      this.handleOutOfBoundsRespawn(
+        this.player1,
+        this.activeMapConfig.spawnPoints.player1
+      );
+    if (this.dummy.sprite.y > this.activeMapConfig.deathY)
+      this.handleOutOfBoundsRespawn(
+        this.dummy,
+        this.activeMapConfig.spawnPoints.dummy
+      );
+
+    const p1WepName = this.weapons[this.p1WeaponIndex]?.name ?? 'Unknown';
+    const dummyWepName = this.weapons[this.dummyWeaponIndex]?.name ?? 'Unknown';
+    const formatAmmo = (ammo: number) => (ammo === -1 ? '∞' : ammo);
+
+    this.scoreText.setText(
+      `P1 [${p1WepName}]: HP ${this.player1.health} | Stocks: ${this.player1.lives} | Ammo: ${formatAmmo(this.p1Ammo)}\n` +
+        `DUMMY [${dummyWepName}]: HP ${this.dummy.health} | Stocks: ${this.dummy.lives} | Ammo: ${formatAmmo(this.dummyAmmo)}`
+    );
+
+    // Dev cheats for weapon switching
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ONE))
+      this.giveWeaponToPlayer(this.player1, 0);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.TWO))
+      this.giveWeaponToPlayer(this.player1, 1);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.THREE))
+      this.giveWeaponToPlayer(this.player1, 2);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.FOUR))
+      this.giveWeaponToPlayer(this.player1, 3);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.FIVE))
+      this.giveWeaponToPlayer(this.player1, 4);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.SIX))
+      this.giveWeaponToPlayer(this.player1, 5);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.SEVEN))
+      this.giveWeaponToPlayer(this.player1, 6);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.EIGHT))
+      this.giveWeaponToPlayer(this.player1, 7);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.NINE))
+      this.giveWeaponToPlayer(this.player1, 8);
+    if (Phaser.Input.Keyboard.JustDown(this.keys.ZERO))
+      this.giveWeaponToPlayer(this.player1, 9);
+
+    // Route inputs to the Player 1's currently active weapon state
+    const p1Wep = this.weapons[this.p1WeaponIndex];
+    if (p1Wep) {
+      if (this.keys.T.isDown) p1Wep.primaryAttack(this.player1);
+      if (this.keys.Y.isDown) p1Wep.secondaryAttack(this.player1);
+    }
+
+    this.rockets.getChildren().forEach((r) => {
+      const rocket = r as Phaser.Physics.Arcade.Sprite;
+      if (!rocket.active) return;
+      const body = rocket.body as Phaser.Physics.Arcade.Body;
+      if (!body) return;
+      const homing = rocket.getData('homingStrength');
+      if (homing > 0 && this.dummy.sprite.active) {
+        const idealAngle = Phaser.Math.Angle.Between(
+          rocket.x,
+          rocket.y,
+          this.dummy.sprite.x,
+          this.dummy.sprite.y
+        );
+        const currentAngle = Math.atan2(body.velocity.y, body.velocity.x);
+        const newAngle = Phaser.Math.Angle.RotateTo(
+          currentAngle,
+          idealAngle,
+          homing
+        );
+        const speed = 700;
+        rocket.setVelocity(
+          Math.cos(newAngle) * speed,
+          Math.sin(newAngle) * speed
+        );
+        rocket.setRotation(newAngle);
+      }
+    });
+
+    this.projectiles.getChildren().forEach((b) => {
+      const bullet = b as Phaser.Physics.Arcade.Sprite;
+      if (bullet.active && (bullet.x < -200 || bullet.x > 2120))
+        this.projectiles.killAndHide(bullet);
+    });
+  }
+
+  private handleOutOfBoundsRespawn(
+    player: Player,
+    spawnLoc: { x: number; y: number }
+  ) {
+    player.sprite.setPosition(spawnLoc.x, spawnLoc.y);
+    player.sprite.setVelocity(0, 0);
+    this.giveWeaponToPlayer(player, 0); // Lose weapon on death
+    if (typeof (player as any).handleRespawn === 'function') {
+      (player as any).handleRespawn();
+    } else {
+      player.takeDamage(0);
+    }
+  }
+
+  private oneWayCallback(playerSprite: any, platform: any) {
+    if (playerSprite === this.player1.sprite && this.keys.S.isDown)
+      return false;
+    const pBody = playerSprite.body as Phaser.Physics.Arcade.Body;
+    const platBody = platform.body as Phaser.Physics.Arcade.StaticBody;
+    return pBody.prev.y + pBody.height <= platBody.position.y;
+  }
+
+  private generateTexture(key: string, w: number, h: number, color: number) {
+    const g = this.add.graphics();
+    g.fillStyle(color);
+    g.fillRect(0, 0, w, h);
+    g.generateTexture(key, w, h);
+    g.destroy();
+  }
+
+  private createPlatform(
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    color: number
+  ) {
+    this.generateTexture(`plat_${width}x${height}`, width, height, color);
+    const plat = this.platforms.create(x, y, `plat_${width}x${height}`);
+    plat.body.checkCollision.down = false;
+    plat.body.checkCollision.left = false;
+    plat.body.checkCollision.right = false;
+  }
+}
+
+
+scenes/LeaderboardScene.ts:
+import Phaser from 'phaser';
+
+export class LeaderboardScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'LeaderboardScene' });
+    }
+
+    create() {
+        const { width, height } = this.cameras.main;
+
+        this.add.text(width / 2, height * 0.4, 'STORY MODE', {
+            fontSize: '48px',
+            fontFamily: 'monospace',
+            color: '#ffffff',
+            letterSpacing: 4
+        }).setOrigin(0.5);
+
+        const backBtn = this.add.text(width / 2, height * 0.6, '< BACK TO MENU', {
+            fontSize: '24px',
+            fontFamily: 'monospace',
+            color: '#ff4500'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
+        backBtn.on('pointerout', () => backBtn.setColor('#ff4500'));
+        backBtn.on('pointerup', () => this.scene.start('MainMenuScene'));
+    }
+}
+
+scenes/StoryModeScene.ts:
+import Phaser from 'phaser';
+
+export class StoryModeScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'StoryModeScene' });
+    }
+
+    create() {
+        const { width, height } = this.cameras.main;
+
+        this.add.text(width / 2, height * 0.4, 'STORY MODE', {
+            fontSize: '48px',
+            fontFamily: 'monospace',
+            color: '#ffffff',
+            letterSpacing: 4
+        }).setOrigin(0.5);
+
+        const backBtn = this.add.text(width / 2, height * 0.6, '< BACK TO MENU', {
+            fontSize: '24px',
+            fontFamily: 'monospace',
+            color: '#ff4500'
+        }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+        backBtn.on('pointerover', () => backBtn.setColor('#ffffff'));
+        backBtn.on('pointerout', () => backBtn.setColor('#ff4500'));
+        backBtn.on('pointerup', () => this.scene.start('MainMenuScene'));
+    }
+}
+
+scenes/MainMenuScene.ts:
+import Phaser from 'phaser';
+
+export class MainMenuScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'MainMenuScene' });
+    }
+
+    create() {
+        const { width, height } = this.cameras.main;
+
+        // Branding Title
+        this.add.text(width / 2, height * 0.25, '[ IMAGE PLACEHOLDER: frag arena ]', {
+            fontSize: '32px',
+            fontFamily: 'monospace',
+            color: '#555562',
+            fontStyle: 'bold',
+            align: 'center'
+        }).setOrigin(0.5).setPadding(20).setStyle({ border: '2px dashed #33333a' });
+
+        // Reusable Button Builder Helper
+        const createButton = (y: number, text: string, isPrimary: boolean, onClick: () => void) => {
+            const btnContainer = this.add.container(width / 2, y);
+            
+            // Base button styling
+            const bgColor = isPrimary ? 0xff4500 : 0x222226;
+            const strokeColor = isPrimary ? 0xff4500 : 0x33333c;
+            const hoverColor = isPrimary ? 0xff5722 : 0x33333a;
+            const clickColor = isPrimary ? 0xcc3700 : 0x111111;
+
+            const bg = this.add.rectangle(0, 0, 300, 60, bgColor)
+                .setStrokeStyle(2, strokeColor)
+                .setInteractive({ useHandCursor: true });
+                
+            const txt = this.add.text(0, 0, text, {
+                fontSize: '20px',
+                fontFamily: 'monospace',
+                color: '#ffffff',
+                fontStyle: 'bold'
+            }).setOrigin(0.5);
+
+            btnContainer.add([bg, txt]);
+
+            // Interactive Event Listeners
+            bg.on('pointerover', () => bg.setFillStyle(hoverColor));
+            bg.on('pointerout', () => bg.setFillStyle(bgColor));
+            bg.on('pointerdown', () => {
+                bg.setFillStyle(clickColor);
+                btnContainer.y += 2; // Press down effect
+            });
+            bg.on('pointerup', () => {
+                bg.setFillStyle(hoverColor);
+                btnContainer.y -= 2; // Release effect
+                onClick();
+            });
+        };
+
+        // Generate the 4 Menu Options
+        createButton(height * 0.45, 'DAILY MAYHEM', true, () => this.scene.start('ArenaScene'));
+        createButton(height * 0.55, 'STORY MODE', false, () => this.scene.start('StoryModeScene'));
+        createButton(height * 0.65, 'LEADERBOARD', false, () => this.scene.start('LeaderboardScene'));
+        createButton(height * 0.75, 'SETTINGS', false, () => this.scene.start('SettingsScene'));
+    }
+}

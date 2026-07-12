@@ -11,7 +11,7 @@ import { Shotgun } from '../entities/weapons/Shotgun';
 import { MachineGun } from '../entities/weapons/MachineGun';
 import { RocketLauncher } from '../entities/weapons/RocketLauncher';
 import { Uzi } from '../entities/weapons/Uzi';
-import { MAP_REGISTRY, IMapData } from '../maps/MapConfig';
+import { MAP_REGISTRY, IMapData } from '../config/MapConfig';
 
 // Define ammo/durability rules for crates (Index 0 is Pistol, handled as infinite)
 const AMMO_CONFIG: Record<number, number> = {

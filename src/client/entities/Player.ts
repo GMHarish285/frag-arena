@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { GameConfig } from '../config/ConfigManager';
 
 type Joint = { x: number; y: number };
 
@@ -9,18 +10,23 @@ export class Player {
 
   // --- STEP 2: ADD SKELETON BONE CONFIGURATIONS (THE RIG) ---
   private skeletonGraphics!: Phaser.GameObjects.Graphics;
+
   private readonly spineLength: number = 35;
   private readonly headRadius: number = 12;
+
   // Limb segment lengths (Upper, Lower)
   private readonly armLen1: number = 22;
   private readonly armLen2 = 22;
+
   private readonly legLen1: number = 28;
   private readonly legLen2 = 28;
+
   // --- STEP 4 RUN CYCLE TRACKING ---
   private walkTime: number = 0;
 
+  private lastGroundedTime: number = 0;
+
   public jumpCount: number = 0;
-  public readonly MAX_JUMPS: number = 2;
   public facingDirection: 'LEFT' | 'RIGHT' = 'RIGHT';
 
   public isBlocking: boolean = false;
@@ -30,11 +36,8 @@ export class Player {
   public lives: number;
   private maxHealth: number;
 
-  // --- EASY BALANCE PROPERTIES FOR INERTIAL MOVEMENT ---
-  private readonly maxMoveSpeed: number = 50; // Sprintf top threshold speed limits
-  private readonly accelerationRate: number = 1800; // How fast you ramp up to top speed (px/sec^2)
-  private readonly groundDrag: number = 4400; // Deceleration slide factor when keys are released
-  private readonly airDrag: number = 4400; // Less friction restriction while airborne
+  // Enforced specific sprite caps not present in standard physics config
+  private readonly maxMoveSpeed: number = 50;
 
   constructor(
     scene: Phaser.Scene,
@@ -43,16 +46,19 @@ export class Player {
     id: string,
     teamId: string,
     color: number,
-    maxHealth: number = 100,
+    maxHealth: number = 100, // Kept signature for backwards compatibility with ArenaScene
     maxLives: number = 10
   ) {
     this.id = id;
     this.teamId = teamId;
-    this.maxHealth = maxHealth;
-    this.health = maxHealth;
-    this.lives = maxLives;
+
+    // USE CONFIG: Health & Lives
+    this.maxHealth = GameConfig.player.stats.maxHealth;
+    this.health = this.maxHealth;
+    this.lives = GameConfig.player.stats.startingLives;
 
     const texKey = `player_tex_${color}`;
+
     if (!scene.textures.exists(texKey)) {
       const g = scene.add.graphics();
       g.fillStyle(color);
@@ -66,13 +72,17 @@ export class Player {
     this.sprite.setData('entity', this);
 
     this.sprite.setSize(32, 95);
+
+    // USE CONFIG: World Gravity
+    this.sprite.setGravityY(GameConfig.world.physics.gravityY);
+
     // Enforce maximum absolute movement limits so acceleration doesn't scale infinitely
     this.sprite.setMaxVelocity(this.maxMoveSpeed, 1200);
 
-    // ◄--- ADD THIS LINE: Hides the block image but leaves debug hitbox visible
+    // Hides the block image but leaves debug hitbox visible
     this.sprite.setAlpha(0);
 
-    // ◄--- ADD THIS LINE: Initializes our procedural skeleton graphics layer
+    // Initializes our procedural skeleton graphics layer
     this.skeletonGraphics = scene.add.graphics();
   }
 
@@ -298,51 +308,78 @@ export class Player {
   }
 
   public update(keys?: any) {
-    const isGrounded = this.sprite.body.touching.down;
-    if (isGrounded) this.jumpCount = 0;
-    else if (this.jumpCount === 0) this.jumpCount = 1;
+    // --- READ FROM CENTRAL CONFIG ---
+    const {
+      accelerationRate,
+      groundDrag,
+      airDrag,
+      jumpVelocity,
+      maxJumps,
+      coyoteTimeMs,
+    } = GameConfig.player.movement;
+    const { boundaries } = GameConfig.world;
 
-    // Dynamic Drag Balancing depending on environment state layers
+    // Get the current game time for our timer checks
+    const currentTime = this.sprite.scene.time.now;
+
+    const isGrounded =
+      this.sprite.body.touching.down || this.sprite.body.blocked.down;
+
+    // --- COYOTE TIME & DRAG LOGIC ---
     if (isGrounded) {
-      this.sprite.setDragX(this.groundDrag); // Slides cleanly to a stop on solid platforms
+      this.jumpCount = 0;
+      this.lastGroundedTime = currentTime;
+      this.sprite.setDragX(groundDrag);
     } else {
-      this.sprite.setDragX(this.airDrag); // Maintains forward horizontal momentum while airborne
+      this.sprite.setDragX(airDrag);
+
+      // If we are airborne and haven't jumped yet, check the coyote grace period.
+      // If the time since we left the ground exceeds the config window, consume the first jump.
+      if (
+        this.jumpCount === 0 &&
+        currentTime - this.lastGroundedTime > coyoteTimeMs
+      ) {
+        this.jumpCount = 1;
+      }
     }
 
+    // --- MOVEMENT INPUTS ---
     if (keys) {
       if (keys.A.isDown) {
-        this.sprite.setAccelerationX(-this.accelerationRate);
+        this.sprite.setAccelerationX(-accelerationRate);
         this.facingDirection = 'LEFT';
       } else if (keys.D.isDown) {
-        this.sprite.setAccelerationX(this.accelerationRate);
+        this.sprite.setAccelerationX(accelerationRate);
         this.facingDirection = 'RIGHT';
       } else {
         // Instantly halt active force addition if no navigation buttons are held down
-        // The native 'setDragX' engine property takes over and decelerates smoothly!
         this.sprite.setAccelerationX(0);
       }
 
-      if (
-        Phaser.Input.Keyboard.JustDown(keys.W) &&
-        this.jumpCount < this.MAX_JUMPS
-      ) {
-        this.sprite.setVelocityY(-850);
+      // --- JUMPING ---
+      if (Phaser.Input.Keyboard.JustDown(keys.W) && this.jumpCount < maxJumps) {
+        this.sprite.setVelocityY(jumpVelocity);
         this.jumpCount++;
+
+        // Instantly zero out the grounded timer so the jump cancels the coyote window
+        this.lastGroundedTime = 0;
       }
     } else {
       // For autonomous entities (Dummy), zero active internal thrust addition
       this.sprite.setAccelerationX(0);
     }
 
-    const padding = 150;
+    // --- BOUNDARY ENFORCEMENT VIA CONFIG ---
     if (
-      this.sprite.y > 1080 + padding ||
-      this.sprite.x < -padding ||
-      this.sprite.x > 1920 + padding
+      this.sprite.y > boundaries.killY ||
+      this.sprite.x < boundaries.minX ||
+      this.sprite.x > boundaries.maxX
     ) {
       this.lives--;
       if (this.lives > 0) {
         this.respawn(960, 200);
+      } else {
+        this.sprite.destroy();
       }
     }
 
