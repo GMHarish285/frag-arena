@@ -21,7 +21,7 @@ const ENGINE_CONFIG = {
     },
     
     pc: {
-      maxOffsetPx: 14,            // ADJUSTED: Softened max pixel drift for comfortable Mac usage
+      maxOffsetPx: 14,            // Softened max pixel drift for comfortable Mac usage
       layer1Bg: 0.20,             // Background space grid travel multiplier
       layer2Chars: 0.60,          // Character standoff container travel multiplier
       layer3Ui: 1.10              // Interface logo and button canvas multiplier
@@ -47,6 +47,10 @@ const ENGINE_CONFIG = {
   flashes: {
     maxConcurrent: 10,            // Total allowed concurrent flare instances rendering together
     spawnChance: 0.06,            // Frame chance tick to emit an active beam element (6% chance)
+    
+    // --- NEW SPAWN PROBABILITY BIAS CONTROLLER ---
+    centerBiasPower: 2.2,         // HIGHER = forces flashes into center grid lines. 1.0 = purely random.
+    
     minSpeed: 0.012,              // Lower speed bounds profile for trailing pulses
     maxSpeed: 0.034,              // Upper speed bounds profile for rapid lighting discharges
     minStreakLength: 0.06,        // Minimum trail footprint span fraction
@@ -133,12 +137,11 @@ function SplashView() {
       const curX = currentOffset.current.x;
       const curY = currentOffset.current.y;
 
-      // Extract tracking profiles based on active device environments
       const currentParallaxProfile = isMobileSensorActive.current 
         ? ENGINE_CONFIG.parallax.mobile 
         : ENGINE_CONFIG.parallax.pc;
 
-      // Draw Screen Void
+      // Draw Screen Background
       ctx.fillStyle = '#0b0b0f';
       ctx.fillRect(0, 0, width, height);
 
@@ -174,10 +177,21 @@ function SplashView() {
       }
       ctx.stroke();
 
-      // --- PARTICLE GENERATION & EMISSION FLORES LAYER ---
+      // --- PARTICLE GENERATION WITH PROBABILITY BIAS CURVING ---
       if (activeFlashes.current.length < ENGINE_CONFIG.flashes.maxConcurrent && Math.random() < ENGINE_CONFIG.flashes.spawnChance) {
+        
+        // Generate symmetric range (-1.0 to 1.0) centered directly at our screen midpoint
+        const rawRandRange = Math.random() * 2 - 1; 
+        
+        // Compress uniform random range heavily towards 0 using the configuration power curve
+        const biasedRange = Math.sign(rawRandRange) * Math.pow(Math.abs(rawRandRange), ENGINE_CONFIG.flashes.centerBiasPower);
+        
+        // Re-normalize back to pure progress array matching standard loop distributions (0.0 to 1.0)
+        const biasedProgress = (biasedRange + 1) / 2;
+        const biasedLineIndex = Math.floor(biasedProgress * (lineCount + 1));
+
         activeFlashes.current.push({
-          lineIndex: Math.floor(Math.random() * (lineCount + 1)),
+          lineIndex: biasedLineIndex,
           progress: 0,
           speed: ENGINE_CONFIG.flashes.minSpeed + Math.random() * (ENGINE_CONFIG.flashes.maxSpeed - ENGINE_CONFIG.flashes.minSpeed),
           streakLength: ENGINE_CONFIG.flashes.minStreakLength + Math.random() * (ENGINE_CONFIG.flashes.maxStreakLength - ENGINE_CONFIG.flashes.minStreakLength),
@@ -219,9 +233,9 @@ function SplashView() {
         return true;
       });
 
-      ctx.shadowBlur = 0; // Flash tracing complete, reset layer styles
+      ctx.shadowBlur = 0; 
 
-      // --- DRAW GLOWING LASER HORIZON DIVIDER ---
+      // --- DRAW HORIZON LINE ---
       ctx.strokeStyle = ENGINE_CONFIG.grid.horizonColor;
       ctx.lineWidth = 3;
       ctx.shadowBlur = ENGINE_CONFIG.grid.horizonGlowBlur;
@@ -232,7 +246,7 @@ function SplashView() {
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // --- MUTATE OBJECT COMPONENT WRAPPERS WITH THE RUNTIME MULTIPLIERS ---
+      // --- MUTATE LAYOUT PARALLAX ELEMENTS ---
       const l2X = curX * currentParallaxProfile.layer2Chars;
       const l2Y = curY * currentParallaxProfile.layer2Chars;
       if (layer2LeftRef.current) layer2LeftRef.current.style.transform = `translate(${l2X}px, ${l2Y}px)`;
@@ -247,7 +261,7 @@ function SplashView() {
 
     animFrameId = requestAnimationFrame(renderLoop);
 
-    // --- INPUT PARSERS SUBSCRIPTIONS ---
+    // --- INPUT PARSERS ---
     const handleDeviceOrientation = (event: DeviceOrientationEvent) => {
       const { gamma, beta } = event; 
       if (gamma === null || beta === null) return;
@@ -352,10 +366,10 @@ function SplashView() {
         <span style={{ fontSize: '11px', opacity: 0.65 }}>[RIGHT STICKMAN SPRITE]</span>
       </div>
 
-      {/* LAYER 3: FOREGROUND CONTROL AND GAME IDENTITY HOOK RENDER BOXES */}
+      {/* LAYER 3: UI WRAPPERS */}
       <div ref={layer3UiRef} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', zIndex: 3, pointerEvents: 'none' }}>
         
-        {/* MONOSPACE TITLE LOGO POSITION COMPONENT */}
+        {/* LOGO BOX */}
         <div style={{
             position: 'absolute',
             top: ENGINE_CONFIG.layout.logo.top,           
@@ -380,7 +394,7 @@ function SplashView() {
             <span>[ GAME TITLE LOGO SPRITE ]</span>
         </div>
 
-        {/* REDDIT EXPANDED CLICK INTERACTION BUTTON RENDER BOUNDING WRAPPER */}
+        {/* PLAY NOW BUTTON */}
         <div
           onClick={handlePlayClick}
           style={{
