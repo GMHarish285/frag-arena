@@ -22,33 +22,34 @@ import { BaseWeaponConfig } from './WeaponConfig';
 import { MAP_REGISTRY } from './MapConfig';
 
 class ConfigurationManager {
-    private static instance: ConfigurationManager;
+  private static instance: ConfigurationManager;
 
-    public world!: typeof BaseWorldConfig;
-    public player!: typeof BasePlayerConfig;
-    public weapons!: typeof BaseWeaponConfig;
-    public maps = MAP_REGISTRY;
+  public world!: typeof BaseWorldConfig;
+  public player!: typeof BasePlayerConfig;
+  public weapons!: typeof BaseWeaponConfig;
+  public maps = MAP_REGISTRY;
 
-    private constructor() {
-        this.resetToBase();
+  private constructor() {
+    this.resetToBase();
+  }
+
+  public static getInstance(): ConfigurationManager {
+    if (!ConfigurationManager.instance) {
+      ConfigurationManager.instance = new ConfigurationManager();
     }
+    return ConfigurationManager.instance;
+  }
 
-    public static getInstance(): ConfigurationManager {
-        if (!ConfigurationManager.instance) {
-            ConfigurationManager.instance = new ConfigurationManager();
-        }
-        return ConfigurationManager.instance;
-    }
-
-    public resetToBase() {
-        // Deep clone allows us to mutate stats in-memory during gameplay safely
-        this.world = JSON.parse(JSON.stringify(BaseWorldConfig));
-        this.player = JSON.parse(JSON.stringify(BasePlayerConfig));
-        this.weapons = JSON.parse(JSON.stringify(BaseWeaponConfig));
-    }
+  public resetToBase() {
+    // Deep clone allows us to mutate stats in-memory during gameplay safely
+    this.world = JSON.parse(JSON.stringify(BaseWorldConfig));
+    this.player = JSON.parse(JSON.stringify(BasePlayerConfig));
+    this.weapons = JSON.parse(JSON.stringify(BaseWeaponConfig));
+  }
 }
 
 export const GameConfig = ConfigurationManager.getInstance();
+
 
 config/MapConfig.ts:
 export interface IPlatformConfig {
@@ -76,31 +77,32 @@ export const MAP_REGISTRY: Record<string, IMapData> = {
     name: 'Classic Mayhem Arena',
     spawnPoints: {
       player1: { x: 760, y: 500 },
-      dummy: { x: 1160, y: 500 }
+      dummy: { x: 1160, y: 500 },
     },
     deathY: 1100,
     platforms: [
       { x: 960, y: 800, width: 800, height: 40, color: 0x888888 }, // Main floor
       { x: 450, y: 600, width: 500, height: 40, color: 0x888888 }, // Left platform
-      { x: 1470, y: 600, width: 500, height: 40, color: 0x888888 }  // Right platform
-    ]
+      { x: 1470, y: 600, width: 500, height: 40, color: 0x888888 }, // Right platform
+    ],
   },
   verticalChasm: {
     id: 'verticalChasm',
     name: 'Vertical Chasm',
     spawnPoints: {
       player1: { x: 500, y: 300 },
-      dummy: { x: 1420, y: 300 }
+      dummy: { x: 1420, y: 300 },
     },
     deathY: 1100,
     platforms: [
       { x: 960, y: 950, width: 400, height: 40, color: 0xaa4444 }, // Small risky bottom center
       { x: 500, y: 700, width: 450, height: 40, color: 0x555555 },
       { x: 1420, y: 700, width: 450, height: 40, color: 0x555555 },
-      { x: 960, y: 450, width: 500, height: 40, color: 0x666666 }  // High floating bridge
-    ]
-  }
+      { x: 960, y: 450, width: 500, height: 40, color: 0x666666 }, // High floating bridge
+    ],
+  },
 };
+
 
 config/WeaponConfig.ts:
 export type WeaponTier = 'DEFAULT' | 'CRATE';
@@ -306,159 +308,21 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
 
 config/WorldConfig.ts:
 export const BaseWorldConfig = {
-    physics: {
-        gravityY: 2400,
-    },
-    boundaries: {
-        minX: -200,
-        maxX: 2120,
-        killY: 1500, // Falling below this triggers death/respawn
-        padding: 150
-    }
+  physics: {
+    gravityY: 2400,
+  },
+  boundaries: {
+    minX: -200,
+    maxX: 2120,
+    killY: 1500, // Falling below this triggers death/respawn
+    padding: 150,
+  },
 };
 
-entities/Player2.ts:
-import Phaser from 'phaser';
-import { GameConfig } from '../config/ConfigManager'; // ◄── Pulls in centralized stats
-
-type Joint = { x: number; y: number };
-
-export class Player {
-  public id: string;
-  public teamId: string;
-  public sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
-
-  // --- STEP 2: ADD SKELETON BONE CONFIGURATIONS (THE RIG) ---
-  private skeletonGraphics!: Phaser.GameObjects.Graphics;
-  private readonly spineLength: number = 35;
-  private readonly headRadius: number = 12;
-  private readonly armLen1: number = 22;
-  private readonly armLen2 = 22;
-  private readonly legLen1: number = 28;
-  private readonly legLen2 = 28;
-  
-  // --- STEP 4 RUN CYCLE TRACKING ---
-  private walkTime: number = 0;
-
-  public jumpCount: number = 0;
-  public facingDirection: 'LEFT' | 'RIGHT' = 'RIGHT';
-
-  public isBlocking: boolean = false;
-  public isInvisible: boolean = false;
-
-  public health: number;
-  public lives: number;
-
-  // Weapon tracking states
-  public currentWeaponId: number = 0;
-  public currentWeaponAmmo: number = Infinity;
-  public lastFiredTime: number = 0;
-
-  constructor(scene: Phaser.Scene, x: number, y: number, id: string, teamId: string) {
-    this.id = id;
-    this.teamId = teamId;
-
-    // Setup player physics sprite
-    this.sprite = scene.physics.add.sprite(x, y, 'player_base') as any;
-    this.sprite.setCollideWorldBounds(false);
-    
-    // USE CONFIG: Gravity
-    this.sprite.setGravityY(GameConfig.world.physics.gravityY);
-
-    // USE CONFIG: Health & Lives
-    this.health = GameConfig.player.stats.maxHealth;
-    this.lives = GameConfig.player.stats.startingLives;
-
-    this.skeletonGraphics = scene.add.graphics();
-    this.skeletonGraphics.setDepth(5);
-  }
-
-  public update(keys?: any) {
-    // --- READ FROM CONFIG ---
-    const { accelerationRate, groundDrag, airDrag, jumpVelocity, maxJumps } = GameConfig.player.movement;
-    const { boundaries } = GameConfig.world;
-
-    if (this.sprite.body.touching.down) {
-      this.jumpCount = 0;
-      this.sprite.setDragX(groundDrag); // USING CONFIG
-    } else {
-      // OLD BEHAVIOR STRICTLY PRESERVED: Dropping off a ledge consumes first jump instantly!
-      if (this.jumpCount === 0) this.jumpCount = 1; 
-      this.sprite.setDragX(airDrag); // USING CONFIG
-    }
-
-    if (keys) {
-      if (keys.A.isDown) {
-        this.sprite.setAccelerationX(-accelerationRate); // USING CONFIG
-        this.facingDirection = 'LEFT';
-      } else if (keys.D.isDown) {
-        this.sprite.setAccelerationX(accelerationRate); // USING CONFIG
-        this.facingDirection = 'RIGHT';
-      } else {
-        // Instantly halt active force addition if no navigation buttons are held down
-        this.sprite.setAccelerationX(0);
-      }
-
-      if (
-        Phaser.Input.Keyboard.JustDown(keys.W) &&
-        this.jumpCount < maxJumps // USING CONFIG
-      ) {
-        this.sprite.setVelocityY(jumpVelocity); // USING CONFIG
-        this.jumpCount++;
-      }
-    } else {
-      // For autonomous entities (Dummy), zero active internal thrust addition
-      this.sprite.setAccelerationX(0);
-    }
-
-    // --- BOUNDARY ENFORCEMENT VIA CONFIG ---
-    if (
-      this.sprite.y > boundaries.killY ||
-      this.sprite.x < boundaries.minX ||
-      this.sprite.x > boundaries.maxX
-    ) {
-      this.lives--;
-      if (this.lives > 0) {
-        this.respawn(960, 200);
-      }
-    }
-
-    this.renderSkeleton();
-  }
-
-  public takeDamage(amount: number) {
-    if (this.isBlocking) amount = Math.floor(amount * 0.2); // Parry protection
-    this.health -= amount;
-    if (this.health <= 0) {
-        this.lives--;
-        if (this.lives > 0) this.respawn(960, 200);
-    }
-  }
-
-  public respawn(x: number, y: number) {
-    this.health = GameConfig.player.stats.maxHealth; // USING CONFIG
-    this.sprite.setPosition(x, y);
-    this.sprite.setVelocity(0, 0);
-    this.jumpCount = 0;
-  }
-
-  public toggleInvisibility() {
-    this.isInvisible = !this.isInvisible;
-    this.sprite.setAlpha(this.isInvisible ? 0.2 : 1.0);
-  }
-
-  // ---------------------------------------------------------------------------------
-  // ⬇️ PASTE YOUR EXACT ORIGINAL `private renderSkeleton()` CODE BELOW THIS LINE! ⬇️
-  // ---------------------------------------------------------------------------------
-  
-  private renderSkeleton() {
-      // Replace this entire function block with your old procedural drawing code 
-      // so your hands hold the guns and legs move exactly the way you designed them!
-  }
-}
 
 entities/Player.ts:
 import Phaser from 'phaser';
+import { GameConfig } from '../config/ConfigManager';
 
 type Joint = { x: number; y: number };
 
@@ -469,18 +333,23 @@ export class Player {
 
   // --- STEP 2: ADD SKELETON BONE CONFIGURATIONS (THE RIG) ---
   private skeletonGraphics!: Phaser.GameObjects.Graphics;
+
   private readonly spineLength: number = 35;
   private readonly headRadius: number = 12;
+
   // Limb segment lengths (Upper, Lower)
   private readonly armLen1: number = 22;
   private readonly armLen2 = 22;
+
   private readonly legLen1: number = 28;
   private readonly legLen2 = 28;
+
   // --- STEP 4 RUN CYCLE TRACKING ---
   private walkTime: number = 0;
 
+  private lastGroundedTime: number = 0;
+
   public jumpCount: number = 0;
-  public readonly MAX_JUMPS: number = 2;
   public facingDirection: 'LEFT' | 'RIGHT' = 'RIGHT';
 
   public isBlocking: boolean = false;
@@ -490,11 +359,8 @@ export class Player {
   public lives: number;
   private maxHealth: number;
 
-  // --- EASY BALANCE PROPERTIES FOR INERTIAL MOVEMENT ---
-  private readonly maxMoveSpeed: number = 50; // Sprintf top threshold speed limits
-  private readonly accelerationRate: number = 1800; // How fast you ramp up to top speed (px/sec^2)
-  private readonly groundDrag: number = 4400; // Deceleration slide factor when keys are released
-  private readonly airDrag: number = 4400; // Less friction restriction while airborne
+  // Enforced specific sprite caps not present in standard physics config
+  private readonly maxMoveSpeed: number = 50;
 
   constructor(
     scene: Phaser.Scene,
@@ -503,16 +369,19 @@ export class Player {
     id: string,
     teamId: string,
     color: number,
-    maxHealth: number = 100,
+    maxHealth: number = 100, // Kept signature for backwards compatibility with ArenaScene
     maxLives: number = 10
   ) {
     this.id = id;
     this.teamId = teamId;
-    this.maxHealth = maxHealth;
-    this.health = maxHealth;
-    this.lives = maxLives;
+
+    // USE CONFIG: Health & Lives
+    this.maxHealth = GameConfig.player.stats.maxHealth;
+    this.health = this.maxHealth;
+    this.lives = GameConfig.player.stats.startingLives;
 
     const texKey = `player_tex_${color}`;
+
     if (!scene.textures.exists(texKey)) {
       const g = scene.add.graphics();
       g.fillStyle(color);
@@ -526,13 +395,17 @@ export class Player {
     this.sprite.setData('entity', this);
 
     this.sprite.setSize(32, 95);
+
+    // USE CONFIG: World Gravity
+    this.sprite.setGravityY(GameConfig.world.physics.gravityY);
+
     // Enforce maximum absolute movement limits so acceleration doesn't scale infinitely
     this.sprite.setMaxVelocity(this.maxMoveSpeed, 1200);
 
-    // ◄--- ADD THIS LINE: Hides the block image but leaves debug hitbox visible
+    // Hides the block image but leaves debug hitbox visible
     this.sprite.setAlpha(0);
 
-    // ◄--- ADD THIS LINE: Initializes our procedural skeleton graphics layer
+    // Initializes our procedural skeleton graphics layer
     this.skeletonGraphics = scene.add.graphics();
   }
 
@@ -758,51 +631,78 @@ export class Player {
   }
 
   public update(keys?: any) {
-    const isGrounded = this.sprite.body.touching.down;
-    if (isGrounded) this.jumpCount = 0;
-    else if (this.jumpCount === 0) this.jumpCount = 1;
+    // --- READ FROM CENTRAL CONFIG ---
+    const {
+      accelerationRate,
+      groundDrag,
+      airDrag,
+      jumpVelocity,
+      maxJumps,
+      coyoteTimeMs,
+    } = GameConfig.player.movement;
+    const { boundaries } = GameConfig.world;
 
-    // Dynamic Drag Balancing depending on environment state layers
+    // Get the current game time for our timer checks
+    const currentTime = this.sprite.scene.time.now;
+
+    const isGrounded =
+      this.sprite.body.touching.down || this.sprite.body.blocked.down;
+
+    // --- COYOTE TIME & DRAG LOGIC ---
     if (isGrounded) {
-      this.sprite.setDragX(this.groundDrag); // Slides cleanly to a stop on solid platforms
+      this.jumpCount = 0;
+      this.lastGroundedTime = currentTime;
+      this.sprite.setDragX(groundDrag);
     } else {
-      this.sprite.setDragX(this.airDrag); // Maintains forward horizontal momentum while airborne
+      this.sprite.setDragX(airDrag);
+
+      // If we are airborne and haven't jumped yet, check the coyote grace period.
+      // If the time since we left the ground exceeds the config window, consume the first jump.
+      if (
+        this.jumpCount === 0 &&
+        currentTime - this.lastGroundedTime > coyoteTimeMs
+      ) {
+        this.jumpCount = 1;
+      }
     }
 
+    // --- MOVEMENT INPUTS ---
     if (keys) {
       if (keys.A.isDown) {
-        this.sprite.setAccelerationX(-this.accelerationRate);
+        this.sprite.setAccelerationX(-accelerationRate);
         this.facingDirection = 'LEFT';
       } else if (keys.D.isDown) {
-        this.sprite.setAccelerationX(this.accelerationRate);
+        this.sprite.setAccelerationX(accelerationRate);
         this.facingDirection = 'RIGHT';
       } else {
         // Instantly halt active force addition if no navigation buttons are held down
-        // The native 'setDragX' engine property takes over and decelerates smoothly!
         this.sprite.setAccelerationX(0);
       }
 
-      if (
-        Phaser.Input.Keyboard.JustDown(keys.W) &&
-        this.jumpCount < this.MAX_JUMPS
-      ) {
-        this.sprite.setVelocityY(-850);
+      // --- JUMPING ---
+      if (Phaser.Input.Keyboard.JustDown(keys.W) && this.jumpCount < maxJumps) {
+        this.sprite.setVelocityY(jumpVelocity);
         this.jumpCount++;
+
+        // Instantly zero out the grounded timer so the jump cancels the coyote window
+        this.lastGroundedTime = 0;
       }
     } else {
       // For autonomous entities (Dummy), zero active internal thrust addition
       this.sprite.setAccelerationX(0);
     }
 
-    const padding = 150;
+    // --- BOUNDARY ENFORCEMENT VIA CONFIG ---
     if (
-      this.sprite.y > 1080 + padding ||
-      this.sprite.x < -padding ||
-      this.sprite.x > 1920 + padding
+      this.sprite.y > boundaries.killY ||
+      this.sprite.x < boundaries.minX ||
+      this.sprite.x > boundaries.maxX
     ) {
       this.lives--;
       if (this.lives > 0) {
         this.respawn(960, 200);
+      } else {
+        this.sprite.destroy();
       }
     }
 
@@ -819,9 +719,6 @@ export class Player {
     if (this.isInvisible) this.toggleInvisibility();
   }
 }
-
-
-
 
 
 entities/weapons/RocketLauncher.ts:

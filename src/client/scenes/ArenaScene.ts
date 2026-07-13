@@ -11,7 +11,8 @@ import { Shotgun } from '../entities/weapons/Shotgun';
 import { MachineGun } from '../entities/weapons/MachineGun';
 import { RocketLauncher } from '../entities/weapons/RocketLauncher';
 import { Uzi } from '../entities/weapons/Uzi';
-import { MAP_REGISTRY, IMapData } from '../config/MapConfig';
+import { IMapData } from '../config/MapConfig';
+import { ARENA_REGISTRY, IArenaConfig } from '../config/ArenaConfig';
 
 // Define ammo/durability rules for crates (Index 0 is Pistol, handled as infinite)
 const AMMO_CONFIG: Record<number, number> = {
@@ -52,11 +53,19 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   private dummyWeaponIndex: number = 0;
   private dummyAmmo: number = -1;
 
-  private activeMapConfig!: IMapData;
-  private currentMapId: string = 'classic';
+  private arenaConfig!: IArenaConfig;
+  private currentArenaId: string = 'neonClassic';
+  private bgLayers: Phaser.GameObjects.Image[] = [];
+  private crateSpawnEvent?: Phaser.Time.TimerEvent;
 
   constructor() {
     super({ key: 'ArenaScene' });
+  }
+
+  preload() {
+    this.load.image('neon_bg1', 'assets/background/neon_arena_bg1.png');
+    this.load.image('neon_bg2', 'assets/background/neon_arena_bg2.png');
+    this.load.image('neon_bg3', 'assets/background/neon_arena_bg3.png');
   }
 
   create() {
@@ -69,9 +78,23 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.solidBombs = this.physics.add.group();
     this.meleeSlashes = this.physics.add.group();
 
-    this.buildMap(this.currentMapId);
+    // Asset Generation
+    this.generateTexture('bullet_tex', 20, 8, 0xffd700);
+    this.generateTexture('pistol_thrown_tex', 30, 20, 0x555555);
+    this.generateTexture('knife_tex', 40, 10, 0xcccccc);
+    this.generateTexture('bomb_tex', 30, 30, 0xff0000);
+    this.generateTexture('rocket_tex', 40, 15, 0xff8800);
+    this.generateTexture('slash_tex', 60, 60, 0xffffff);
+    this.generateTexture('crate_tex', 32, 32, 0xd2b48c); // Supply Crate
 
-    const spawnPoints = this.activeMapConfig.spawnPoints;
+    // Background layers placeholder textures
+    this.generateTexture('bg_layer_3', 1920, 1080, 0x111133);
+    this.generateTexture('bg_layer_2', 1920, 1080, 0x222244);
+    this.generateTexture('bg_layer_1', 1920, 1080, 0x333355);
+
+    this.buildArena(this.currentArenaId);
+
+    const spawnPoints = this.arenaConfig.map.spawnPoints;
     this.player1 = new Player(
       this,
       spawnPoints.player1.x,
@@ -95,15 +118,6 @@ export class ArenaScene extends Phaser.Scene implements IArena {
 
     this.playersGroup.add(this.player1.sprite);
     this.playersGroup.add(this.dummy.sprite);
-
-    // Asset Generation
-    this.generateTexture('bullet_tex', 20, 8, 0xffd700);
-    this.generateTexture('pistol_thrown_tex', 30, 20, 0x555555);
-    this.generateTexture('knife_tex', 40, 10, 0xcccccc);
-    this.generateTexture('bomb_tex', 30, 30, 0xff0000);
-    this.generateTexture('rocket_tex', 40, 15, 0xff8800);
-    this.generateTexture('slash_tex', 60, 60, 0xffffff);
-    this.generateTexture('crate_tex', 32, 32, 0xd2b48c); // Supply Crate
 
     // Colliders & Overlaps
     this.physics.add.collider(
@@ -158,21 +172,13 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       new Uzi(this),
     ];
 
-    // Equip default pistols
-    this.giveWeaponToPlayer(this.player1, 0);
-    this.giveWeaponToPlayer(this.dummy, 0);
+    // Equip default weapons based on config
+    this.giveWeaponToPlayer(this.player1, this.arenaConfig.defaultWeaponIndex);
+    this.giveWeaponToPlayer(this.dummy, this.arenaConfig.defaultWeaponIndex);
 
     this.keys = this.input.keyboard!.addKeys(
       'W,A,S,D,T,Y,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE,ZERO'
     ) as any;
-
-    // Start Supply Drop Loop (spawns every 6 seconds)
-    this.time.addEvent({
-      delay: 6000,
-      callback: this.spawnCrate,
-      callbackScope: this,
-      loop: true,
-    });
 
     // Add this inside ArenaScene's create() method:
     const quitBtn = this.add
@@ -193,26 +199,56 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     });
   }
 
-  public buildMap(mapId: string) {
-    const config = MAP_REGISTRY[mapId];
+  public buildArena(arenaId: string) {
+    const config = ARENA_REGISTRY[arenaId];
     if (!config) return;
-    this.currentMapId = mapId;
-    this.activeMapConfig = config;
+    this.currentArenaId = arenaId;
+    
+    // Deep copy the arena configuration for runtime mods
+    this.arenaConfig = JSON.parse(JSON.stringify(config));
+    
     this.platforms.clear(true, true);
+    
+    // Clear old background layers
+    this.bgLayers.forEach((bg) => bg.destroy());
+    this.bgLayers = [];
+    
+    // Build Background Layers
+    this.arenaConfig.layers.forEach((layer) => {
+      const bg = this.add.image(960, 540, layer.texture); // screen center ish
+      bg.setScrollFactor(layer.scrollFactorX, layer.scrollFactorY);
+      if (layer.depth !== undefined) {
+        bg.setDepth(layer.depth);
+      }
+      this.bgLayers.push(bg);
+    });
 
-    config.platforms.forEach((plat) => {
+    this.arenaConfig.map.platforms.forEach((plat) => {
       this.createPlatform(plat.x, plat.y, plat.width, plat.height, plat.color);
     });
 
     if (this.player1 && this.dummy) {
       this.player1.sprite.setPosition(
-        config.spawnPoints.player1.x,
-        config.spawnPoints.player1.y
+        this.arenaConfig.map.spawnPoints.player1.x,
+        this.arenaConfig.map.spawnPoints.player1.y
       );
       this.dummy.sprite.setPosition(
-        config.spawnPoints.dummy.x,
-        config.spawnPoints.dummy.y
+        this.arenaConfig.map.spawnPoints.dummy.x,
+        this.arenaConfig.map.spawnPoints.dummy.y
       );
+    }
+    
+    // Reset crate spawning timer
+    if (this.crateSpawnEvent) {
+      this.crateSpawnEvent.destroy();
+    }
+    if (this.arenaConfig.crateConfig.enabled) {
+      this.crateSpawnEvent = this.time.addEvent({
+        delay: this.arenaConfig.crateConfig.spawnDelayMs,
+        callback: this.spawnCrate,
+        callbackScope: this,
+        loop: true,
+      });
     }
   }
 
@@ -222,7 +258,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     // Clear any existing unclaimed crates from the map first
     this.crates.clear(true, true);
 
-    const platforms = this.activeMapConfig.platforms;
+    const platforms = this.arenaConfig.map.platforms;
     if (!platforms || platforms.length === 0) return;
 
     // Pick a random platform
@@ -242,8 +278,12 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     crateSprite.destroy(); // Consume crate
     const player = pSprite.getData('entity') as Player;
 
-    // Give random crate weapon (Indices 1 through 9)
-    const randomWepIndex = Phaser.Math.Between(1, 9);
+    const availableWeapons = this.arenaConfig.crateConfig.availableWeapons;
+    let randomWepIndex = 0;
+    if (availableWeapons.length > 0) {
+      randomWepIndex = Phaser.Utils.Array.GetRandom(availableWeapons);
+    }
+    
     this.giveWeaponToPlayer(player, randomWepIndex);
   }
 
@@ -459,15 +499,15 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.player1.update(this.keys);
     this.dummy.update();
 
-    if (this.player1.sprite.y > this.activeMapConfig.deathY)
+    if (this.player1.sprite.y > this.arenaConfig.map.deathY)
       this.handleOutOfBoundsRespawn(
         this.player1,
-        this.activeMapConfig.spawnPoints.player1
+        this.arenaConfig.map.spawnPoints.player1
       );
-    if (this.dummy.sprite.y > this.activeMapConfig.deathY)
+    if (this.dummy.sprite.y > this.arenaConfig.map.deathY)
       this.handleOutOfBoundsRespawn(
         this.dummy,
-        this.activeMapConfig.spawnPoints.dummy
+        this.arenaConfig.map.spawnPoints.dummy
       );
 
     const p1WepName = this.weapons[this.p1WeaponIndex]?.name ?? 'Unknown';
