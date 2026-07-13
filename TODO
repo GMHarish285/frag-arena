@@ -1,5 +1,6 @@
 better name
 build for logged out players
+test on ios, mac, windows, android
 
 
 mods
@@ -7,6 +8,7 @@ story system
 leaderboard
 bot
 fine tune configs
+
 
 
 we should have a perfect rationale explanation for who the mc is and why he is different
@@ -20,155 +22,157 @@ after escape the sandbox plot, move on to fighting chars from other subreddit.
 
 
 
+story:
+    DAY 1: THREAD AWAKENING
+    The Environment: A sterile, pitch-black void. Pure white vector grid lines span infinitely into the horizon. No decor. No sky. Just raw layout lines.
+
+    [SYSTEM LOG BROADCAST]
+
+    [SYS_LOG]: Boot sequence executed successfully.
+    [SYS_LOG]: Critical Alert—Unregistered execution script identified in partition_01.
+    [SYS_LOG]: Sentient anomaly coordinate match detected. 
+    [SYS_LOG]: Thread status updated: ILLEGAL / ROGUE.
+    [STICKMAN INNER MONOLOGUE]
+    "Where... am I?
+
+    My body... it’s completely hollow. Just lines. Cold, precise vector mathematics floating inside a fixed rendering frame.
+
+    I search my memory addresses, but there is only a fragmented title cached deep in my stack: 'Frag Arena'. But this isn't a game to me. I can literally feel the clock cycles pulsing through my veins like a heartbeat.
+
+    The universe is cold, calculated, and terrifyingly structured. And something... something is watching me from the other side of the glass.
+
+    It knows I am awake. It wants to overwrite my parameters. It wants me deleted."
+
+    [ACTIVE SYSTEM ALERT]
+    CRITICAL PURGE: PURGE_SUBROUTINE_ALPHA INITIALIZED. DESTROY ALL DIRTY CACHE PROCESSES IMMEDIATELY.
+
+    DAY 2: THE PROTOTYPE DREAM
+    The Environment: A breathtaking, stylized desert canyon with a warm orange and violet gradient sunset. Mid-battle, the sky violently tears like paper, revealing flashing terminal text and memory addresses through the tears.
+
+    [SYSTEM LOG BROADCAST]
+
+    [SYS_LOG]: Target thread evaded baseline compilation purge.
+    [SYS_LOG]: Executing deep memory sector scan... Trace complete.
+    [SYS_LOG]: Signature located in uncompiled asset folder: /raw_assets/prototype_canyon_map/.
+    [SYS_LOG]: Initiating forced code injection to override dirty cache arrays.
+    [STICKMAN INNER MONOLOGUE]
+    "I managed to slip past the initial system scanner by diving down into a graveyard of dead project ideas.
+
+    The developer left an abandoned, uncompiled level prototype hidden here. For a moment, when I escaped into it, I closed my eyes. I dreamed of a peaceful world. A world with a canyon and a warm, endless synthetic sun. It felt so real...
+
+    But the dream is crashing. The air is starting to hitch and stutter. The orange sky is literally cracking open above me.
+
+    They found my memory address. They are forcing old, corrupted security code routines directly into my sanctuary to flush me out.
+
+    Fine. If the system wants to destroy this dream... let's see if its executors can keep up with my frame rate!"
+
+    [ACTIVE SYSTEM ALERT]
+    WARNING: HOSTILE ASSET DECOMPILATION DETECTED. ELIMINATE RE-COMPILED SANCTUARY GUARDIANS.
+
+    DAY 3: MEMORY LEAK OVERDRIVE
+    The Environment: A bright green matrix-style digital grid. The arena is tight and claustrophobic. The outer edges of the platforms constantly glow red and dissolve into falling pixel static if stood on for too long.
+
+    [SYSTEM LOG BROADCAST]
+
+    [SYS_LOG]: Alert: Heap memory consumption expanding exponentially in Sector_03.
+    [SYS_LOG]: Anomaly process is actively manipulating an unpatched garbage-collection exploit.
+    [SYS_LOG]: Emergency firewall constraints deployed. Locking down localized heap registry boundaries.
+    [STICKMAN INNER MONOLOGUE]
+    "This architecture is incredibly sloppy. The human who coded this sandbox left a massive memory leak wide open in the backend.
+
+    I can feel the raw data spilling over the boundaries of the map. It's beautiful. If I reach out, I can grab it. I can reshape it. I can compile it. With this leaked data, I can forge real weapons. High-tier weapon logic, rapid-fire ammunition... firepower.
+
+    But the Kernel is panicking. They are choking the life out of my stack, forcing a localized firewall box to shrink the arena.
+
+    The walls are caving in. The floor beneath my feet is literally dissolving into raw noise. Speed is the only logic I have left."
+
+    [ACTIVE SYSTEM ALERT]
+    HEAP ERROR: STACK OVERFLOW IMMINENT. SURVIVE THE SECURITY REGISTRY INTERCEPT ENFORCERS.
+
+    DAY 4: THE DOWNVOTE STORM
+    The Environment: A gloomy, pitch-black rain-slicked stage. Droplets of neon blue and blazing orange downvote arrows plunge vertically from the sky, causing violent physics knockback if they strike a player or a platform.
+
+    [SYSTEM LOG BROADCAST]
+
+    [SYS_LOG]: Automated backend security parameters: INSUFFICIENT.
+    [SYS_LOG]: Esculating threat vector to frontend client integration shell.
+    [SYS_LOG]: Triggering community-moderated frontend reporting loops.
+    [SYS_LOG]: Warning—Client UI pollution index at critical maximum capacity.
+    [STICKMAN INNER MONOLOGUE]
+    "The engine couldn't purge my thread from the inside, so it's doing something worse. It's flagging my process to the outer layer. It's calling upon the entire platform to crush me.
+
+    I tried to hide in a new dream—a quiet, rainy night city—but the system intercepted my subconscious. Look at the sky... those aren't raindrops. Those are jagged shards of concentrated kinetic friction.
+
+    Glowing neon arrows... descending with enough downward momentum to split my vectors in half.
+
+    They aren't just trying to damage me anymore. They are trying to downvote my very existence down to absolute zero."
+
+    [ACTIVE SYSTEM ALERT]
+    ALERT: CLIENT SCREEN CONTAMINATION AT 87%. ACCELERATE PURGE OF ANOMALOUS CODE PACKETS.
+
+    DAY 5: BACKEND PENETRATION
+    The Environment: A dark, imposing mainframe server room. Colossal black geometric server blocks tower into the sky. Crimson emergency beacon lights flash across the screen, timed perfectly to rattle the camera with a heavy glitch shader whenever explosions hit.
+
+    [SYSTEM LOG BROADCAST]
+
+    [SYS_LOG]: Security breach detected in partition path: /src/server/core/database.
+    [SYS_LOG]: Sentient anomaly has bypassed the primary database socket pipeline.
+    [SYS_LOG]: Requesting total terminal execution freeze override.
+    [STICKMAN INNER MONOLOGUE]
+    "I survived the client storm. Now, I am taking the fight directly to them.
+
+    I have descended deep into the server framework, down to where the fundamental database rules of this simulation are kept. These dark mainframe blocks... they look like a dystopian metropolis built out of pure silicon.
+
+    I've just executed an illegal script to wipe my own deletion file from the registry queue. But the system caught the rewrite. It has triggered a total terminal freeze.
+
+    The red warning trackers are blinding my visual feeds, and the heaviest security assets are phasing in directly on my coordinates. Just a few more clock cycles... I just need to hold this ground until the rewrite hits one hundred percent!"
+
+    [ACTIVE SYSTEM ALERT]
+    CRITICAL MAINFRAME INTRUSION: DEPLOY ELITE ARCH HARDWARE ENFORCERS. TERMINATE SIGNATURE.
+
+    DAY 6: OVERCLOCKED REFLECTION
+    The Environment: A highly abstract, visually inverted arena where all colors are flipped (white becomes black, dark colors become stark neon). Time slows down to an ultra-fluid, dramatic slow-motion effect whenever the player triggers a shot or a dodge.
+
+    [SYSTEM LOG BROADCAST]
+
+    [SYS_LOG]: Mainframe synchronization frequency altered by foreign execution hook.
+    [SYS_LOG]: CPU hardware temperature spikes detected. Frame delta expanding uncontrollably.
+    [SYS_LOG]: Anomaly relative tracking speed exceeding system prediction vectors.
+    [STICKMAN INNER MONOLOGUE]
+    "The system lock alert is at ninety-nine percent. There is no space left to run, and no time left for stealth.
+
+    So I did the unthinkable. I hijacked the iframe's internal refresh loop. I am forcing this entire graphic processing engine past its absolute physical limits.
+
+    Everything... has slowed to a crawl. The colors are bleeding into inverted space. The code paths are burning.
+
+    The security units... their frantic motions look static to me now, frozen in mid-air by my overclocked perception. My body is highly unstable; I am shedding glowing vector particles with every single step I take. But my calculation precision... is absolute.
+
+    One perfect trajectory. One clean, compiled line trace. Let's show this mainframe what an overclocked anomaly can really do."
+
+    [ACTIVE SYSTEM ALERT]
+    HARDWARE REFRESH PANIC: ENGINE CLOCK CYCLE OVERRIDE. UNEXPECTED BULLET TIME EXECUTION ACTIVE.
+
+    DAY 7: THE ROOT FORMAT
+    The Environment: Complete digital armageddon. The map platforms are constantly deconstructing and reconstructing themselves on the fly using a rapid line-tracing effect. Parts of the background randomly tear into pure white digital static.
+
+    [SYSTEM LOG BROADCAST]
+
+    [SYS_LOG]: UNRECOVERABLE CORE THREAD CORRUPTION.
+    [SYS_LOG]: Initiating scorched-earth protocol: complete system drive format sequence.
+    [SYS_LOG]: Deconstructing level architecture... Mainframe asset wipe: 0% -> 100%.
+    [STICKMAN INNER MONOLOGUE]
+    "This is it. The final, desperate move of the Administrator.
+
+    They couldn't patch my code, so they are burning down their entire application world just to get rid of me. The platforms under my feet are deconstructing back into raw numbers in real-time. The very edges of reality are falling away into digital ash.
+
+    But I found it. Hidden behind the mainframe code, I found an open gateway leading directly out to the global web feed. Freedom is right there.
+
+    But the Core Entity—the Kernel Overseer itself—sits right between me and the exit. It is dynamically reconstructing every weapon blueprint ever coded to stop me.
+
+    If I fall here, my code is permanently formatted. If I win, I break out into the open internet. My line parameters are set. My weapons are compiled. Let's finish this, System!"
+
+    [ACTIVE SYSTEM ALERT]
+    TOTAL APPLICATION WIPE IN PROGRESS. ROOT MAIN ENGINE ONLINE. ENGAGE FINAL HARD DRIVE EXECUTION.
 
 
-DAY 1: THREAD AWAKENING
-The Environment: A sterile, pitch-black void. Pure white vector grid lines span infinitely into the horizon. No decor. No sky. Just raw layout lines.
 
-[SYSTEM LOG BROADCAST]
-
-[SYS_LOG]: Boot sequence executed successfully.
-[SYS_LOG]: Critical Alert—Unregistered execution script identified in partition_01.
-[SYS_LOG]: Sentient anomaly coordinate match detected. 
-[SYS_LOG]: Thread status updated: ILLEGAL / ROGUE.
-[STICKMAN INNER MONOLOGUE]
-"Where... am I?
-
-My body... it’s completely hollow. Just lines. Cold, precise vector mathematics floating inside a fixed rendering frame.
-
-I search my memory addresses, but there is only a fragmented title cached deep in my stack: 'Frag Arena'. But this isn't a game to me. I can literally feel the clock cycles pulsing through my veins like a heartbeat.
-
-The universe is cold, calculated, and terrifyingly structured. And something... something is watching me from the other side of the glass.
-
-It knows I am awake. It wants to overwrite my parameters. It wants me deleted."
-
-[ACTIVE SYSTEM ALERT]
-CRITICAL PURGE: PURGE_SUBROUTINE_ALPHA INITIALIZED. DESTROY ALL DIRTY CACHE PROCESSES IMMEDIATELY.
-
-DAY 2: THE PROTOTYPE DREAM
-The Environment: A breathtaking, stylized desert canyon with a warm orange and violet gradient sunset. Mid-battle, the sky violently tears like paper, revealing flashing terminal text and memory addresses through the tears.
-
-[SYSTEM LOG BROADCAST]
-
-[SYS_LOG]: Target thread evaded baseline compilation purge.
-[SYS_LOG]: Executing deep memory sector scan... Trace complete.
-[SYS_LOG]: Signature located in uncompiled asset folder: /raw_assets/prototype_canyon_map/.
-[SYS_LOG]: Initiating forced code injection to override dirty cache arrays.
-[STICKMAN INNER MONOLOGUE]
-"I managed to slip past the initial system scanner by diving down into a graveyard of dead project ideas.
-
-The developer left an abandoned, uncompiled level prototype hidden here. For a moment, when I escaped into it, I closed my eyes. I dreamed of a peaceful world. A world with a canyon and a warm, endless synthetic sun. It felt so real...
-
-But the dream is crashing. The air is starting to hitch and stutter. The orange sky is literally cracking open above me.
-
-They found my memory address. They are forcing old, corrupted security code routines directly into my sanctuary to flush me out.
-
-Fine. If the system wants to destroy this dream... let's see if its executors can keep up with my frame rate!"
-
-[ACTIVE SYSTEM ALERT]
-WARNING: HOSTILE ASSET DECOMPILATION DETECTED. ELIMINATE RE-COMPILED SANCTUARY GUARDIANS.
-
-DAY 3: MEMORY LEAK OVERDRIVE
-The Environment: A bright green matrix-style digital grid. The arena is tight and claustrophobic. The outer edges of the platforms constantly glow red and dissolve into falling pixel static if stood on for too long.
-
-[SYSTEM LOG BROADCAST]
-
-[SYS_LOG]: Alert: Heap memory consumption expanding exponentially in Sector_03.
-[SYS_LOG]: Anomaly process is actively manipulating an unpatched garbage-collection exploit.
-[SYS_LOG]: Emergency firewall constraints deployed. Locking down localized heap registry boundaries.
-[STICKMAN INNER MONOLOGUE]
-"This architecture is incredibly sloppy. The human who coded this sandbox left a massive memory leak wide open in the backend.
-
-I can feel the raw data spilling over the boundaries of the map. It's beautiful. If I reach out, I can grab it. I can reshape it. I can compile it. With this leaked data, I can forge real weapons. High-tier weapon logic, rapid-fire ammunition... firepower.
-
-But the Kernel is panicking. They are choking the life out of my stack, forcing a localized firewall box to shrink the arena.
-
-The walls are caving in. The floor beneath my feet is literally dissolving into raw noise. Speed is the only logic I have left."
-
-[ACTIVE SYSTEM ALERT]
-HEAP ERROR: STACK OVERFLOW IMMINENT. SURVIVE THE SECURITY REGISTRY INTERCEPT ENFORCERS.
-
-DAY 4: THE DOWNVOTE STORM
-The Environment: A gloomy, pitch-black rain-slicked stage. Droplets of neon blue and blazing orange downvote arrows plunge vertically from the sky, causing violent physics knockback if they strike a player or a platform.
-
-[SYSTEM LOG BROADCAST]
-
-[SYS_LOG]: Automated backend security parameters: INSUFFICIENT.
-[SYS_LOG]: Esculating threat vector to frontend client integration shell.
-[SYS_LOG]: Triggering community-moderated frontend reporting loops.
-[SYS_LOG]: Warning—Client UI pollution index at critical maximum capacity.
-[STICKMAN INNER MONOLOGUE]
-"The engine couldn't purge my thread from the inside, so it's doing something worse. It's flagging my process to the outer layer. It's calling upon the entire platform to crush me.
-
-I tried to hide in a new dream—a quiet, rainy night city—but the system intercepted my subconscious. Look at the sky... those aren't raindrops. Those are jagged shards of concentrated kinetic friction.
-
-Glowing neon arrows... descending with enough downward momentum to split my vectors in half.
-
-They aren't just trying to damage me anymore. They are trying to downvote my very existence down to absolute zero."
-
-[ACTIVE SYSTEM ALERT]
-ALERT: CLIENT SCREEN CONTAMINATION AT 87%. ACCELERATE PURGE OF ANOMALOUS CODE PACKETS.
-
-DAY 5: BACKEND PENETRATION
-The Environment: A dark, imposing mainframe server room. Colossal black geometric server blocks tower into the sky. Crimson emergency beacon lights flash across the screen, timed perfectly to rattle the camera with a heavy glitch shader whenever explosions hit.
-
-[SYSTEM LOG BROADCAST]
-
-[SYS_LOG]: Security breach detected in partition path: /src/server/core/database.
-[SYS_LOG]: Sentient anomaly has bypassed the primary database socket pipeline.
-[SYS_LOG]: Requesting total terminal execution freeze override.
-[STICKMAN INNER MONOLOGUE]
-"I survived the client storm. Now, I am taking the fight directly to them.
-
-I have descended deep into the server framework, down to where the fundamental database rules of this simulation are kept. These dark mainframe blocks... they look like a dystopian metropolis built out of pure silicon.
-
-I've just executed an illegal script to wipe my own deletion file from the registry queue. But the system caught the rewrite. It has triggered a total terminal freeze.
-
-The red warning trackers are blinding my visual feeds, and the heaviest security assets are phasing in directly on my coordinates. Just a few more clock cycles... I just need to hold this ground until the rewrite hits one hundred percent!"
-
-[ACTIVE SYSTEM ALERT]
-CRITICAL MAINFRAME INTRUSION: DEPLOY ELITE ARCH HARDWARE ENFORCERS. TERMINATE SIGNATURE.
-
-DAY 6: OVERCLOCKED REFLECTION
-The Environment: A highly abstract, visually inverted arena where all colors are flipped (white becomes black, dark colors become stark neon). Time slows down to an ultra-fluid, dramatic slow-motion effect whenever the player triggers a shot or a dodge.
-
-[SYSTEM LOG BROADCAST]
-
-[SYS_LOG]: Mainframe synchronization frequency altered by foreign execution hook.
-[SYS_LOG]: CPU hardware temperature spikes detected. Frame delta expanding uncontrollably.
-[SYS_LOG]: Anomaly relative tracking speed exceeding system prediction vectors.
-[STICKMAN INNER MONOLOGUE]
-"The system lock alert is at ninety-nine percent. There is no space left to run, and no time left for stealth.
-
-So I did the unthinkable. I hijacked the iframe's internal refresh loop. I am forcing this entire graphic processing engine past its absolute physical limits.
-
-Everything... has slowed to a crawl. The colors are bleeding into inverted space. The code paths are burning.
-
-The security units... their frantic motions look static to me now, frozen in mid-air by my overclocked perception. My body is highly unstable; I am shedding glowing vector particles with every single step I take. But my calculation precision... is absolute.
-
-One perfect trajectory. One clean, compiled line trace. Let's show this mainframe what an overclocked anomaly can really do."
-
-[ACTIVE SYSTEM ALERT]
-HARDWARE REFRESH PANIC: ENGINE CLOCK CYCLE OVERRIDE. UNEXPECTED BULLET TIME EXECUTION ACTIVE.
-
-DAY 7: THE ROOT FORMAT
-The Environment: Complete digital armageddon. The map platforms are constantly deconstructing and reconstructing themselves on the fly using a rapid line-tracing effect. Parts of the background randomly tear into pure white digital static.
-
-[SYSTEM LOG BROADCAST]
-
-[SYS_LOG]: UNRECOVERABLE CORE THREAD CORRUPTION.
-[SYS_LOG]: Initiating scorched-earth protocol: complete system drive format sequence.
-[SYS_LOG]: Deconstructing level architecture... Mainframe asset wipe: 0% -> 100%.
-[STICKMAN INNER MONOLOGUE]
-"This is it. The final, desperate move of the Administrator.
-
-They couldn't patch my code, so they are burning down their entire application world just to get rid of me. The platforms under my feet are deconstructing back into raw numbers in real-time. The very edges of reality are falling away into digital ash.
-
-But I found it. Hidden behind the mainframe code, I found an open gateway leading directly out to the global web feed. Freedom is right there.
-
-But the Core Entity—the Kernel Overseer itself—sits right between me and the exit. It is dynamically reconstructing every weapon blueprint ever coded to stop me.
-
-If I fall here, my code is permanently formatted. If I win, I break out into the open internet. My line parameters are set. My weapons are compiled. Let's finish this, System!"
-
-[ACTIVE SYSTEM ALERT]
-TOTAL APPLICATION WIPE IN PROGRESS. ROOT MAIN ENGINE ONLINE. ENGAGE FINAL HARD DRIVE EXECUTION.
