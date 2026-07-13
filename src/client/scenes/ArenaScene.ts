@@ -598,10 +598,18 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   }
 
   private oneWayCallback(playerSprite: any, platform: any) {
-    if (playerSprite === this.player1.sprite && this.keys.S.isDown)
-      return false;
     const pBody = playerSprite.body as Phaser.Physics.Arcade.Body;
     const platBody = platform.body as Phaser.Physics.Arcade.StaticBody;
+
+    if (playerSprite === this.player1.sprite && Phaser.Input.Keyboard.JustDown(this.keys.S)) {
+      const player = playerSprite.getData('entity') as Player;
+      const timeSinceLanded = this.time.now - player.lastLandedTime;
+      // Ensure they have been on the platform (or spawned) for at least 200ms before allowing drop
+      if (timeSinceLanded > 200) {
+        return false;
+      }
+    }
+    
     return pBody.prev.y + pBody.height <= platBody.position.y;
   }
 

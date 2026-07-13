@@ -29,6 +29,9 @@ export class Player {
   public jumpCount: number = 0;
   public facingDirection: 'LEFT' | 'RIGHT' = 'RIGHT';
 
+  public lastLandedTime: number = 0;
+  private wasGrounded: boolean = false;
+
   public isBlocking: boolean = false;
   public isInvisible: boolean = false;
 
@@ -325,6 +328,11 @@ export class Player {
     const isGrounded =
       this.sprite.body.touching.down || this.sprite.body.blocked.down;
 
+    if (isGrounded && !this.wasGrounded) {
+      this.lastLandedTime = currentTime;
+    }
+    this.wasGrounded = isGrounded;
+
     // --- COYOTE TIME & DRAG LOGIC ---
     if (isGrounded) {
       this.jumpCount = 0;
@@ -393,6 +401,7 @@ export class Player {
     this.sprite.setPosition(x, y);
     this.jumpCount = 1;
     this.isBlocking = false;
+    this.lastLandedTime = this.sprite.scene.time.now;
     if (this.isInvisible) this.toggleInvisibility();
   }
 }
