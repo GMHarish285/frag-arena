@@ -311,6 +311,13 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     // Build Background Layers
     this.arenaConfig.layers.forEach((layer) => {
       const bg = this.add.image(960, 540, layer.texture); // screen center ish
+      
+      // Generalize scaling: calculate the scale needed to cover 1920x1080
+      const scaleX = 1920 / bg.width;
+      const scaleY = 1080 / bg.height;
+      const scale = Math.max(scaleX, scaleY);
+      bg.setScale(scale);
+
       bg.setScrollFactor(layer.scrollFactorX, layer.scrollFactorY);
       if (layer.depth !== undefined) {
         bg.setDepth(layer.depth);
