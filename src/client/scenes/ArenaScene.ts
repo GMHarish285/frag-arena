@@ -271,30 +271,27 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       return circle;
     };
 
-    // --- LEFT SIDE: D-PAD (W,A,S,D) & DIAGONALS ---
-    const baseX = 250;
-    const baseY = 800;
-    const spacing = 130;
-    const diag = 95; // Diagonal spacing (approx 130 * sin(45))
+    // --- LEFT SIDE: MOVEMENT (A, D) ---
+    const leftX = 250;
+    const leftY = 850;
+    const leftSpacing = 130;
 
-    // Cardinals
-    createBtn(baseX, baseY - spacing, 'W', ['W']);       // UP
-    createBtn(baseX, baseY + spacing, 'S', ['S']);       // DOWN
-    createBtn(baseX - spacing, baseY, 'A', ['A']);       // LEFT
-    createBtn(baseX + spacing, baseY, 'D', ['D']);       // RIGHT
+    createBtn(leftX - leftSpacing, leftY, 'A', ['A'], 70);       // LEFT
+    createBtn(leftX + leftSpacing, leftY, 'D', ['D'], 70);       // RIGHT
 
-    // Diagonals (Slightly smaller radius)
-    createBtn(baseX - diag, baseY - diag, '↖', ['W', 'A'], 50); // UP-LEFT
-    createBtn(baseX + diag, baseY - diag, '↗', ['W', 'D'], 50); // UP-RIGHT
-    createBtn(baseX - diag, baseY + diag, '↙', ['S', 'A'], 50); // DOWN-LEFT
-    createBtn(baseX + diag, baseY + diag, '↘', ['S', 'D'], 50); // DOWN-RIGHT
+    // --- RIGHT SIDE: ACTIONS (W, S, T, Y) ---
+    const rightX = 1920 - 300;
+    const rightY = 800;
+    const rightSpacing = 130;
 
-    // --- RIGHT SIDE: SHOOT BUTTONS (T, Y) ---
+    createBtn(rightX, rightY - rightSpacing, 'W\n(JUMP)', ['W'], 65);     // UP / JUMP
+    createBtn(rightX, rightY + rightSpacing, 'S\n(DROP)', ['S'], 65);     // DOWN / DROP
+    
     // Primary Fire (T)
-    createBtn(1920 - 350, 850, 'PRI\n(T)', ['T'], 85);
+    createBtn(rightX - rightSpacing, rightY, 'PRI\n(T)', ['T'], 70);
     
     // Secondary Fire (Y)
-    createBtn(1920 - 150, 700, 'SEC\n(Y)', ['Y'], 65);
+    createBtn(rightX + rightSpacing, rightY, 'SEC\n(Y)', ['Y'], 60);
   }
 
   public buildArena(arenaId: string) {
