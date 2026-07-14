@@ -325,8 +325,10 @@ export class Player {
     // Get the current game time for our timer checks
     const currentTime = this.sprite.scene.time.now;
 
+    // A player can NEVER be grounded if they are actively moving upwards
     const isGrounded =
-      this.sprite.body.touching.down || this.sprite.body.blocked.down;
+      (this.sprite.body.touching.down || this.sprite.body.blocked.down) && 
+      this.sprite.body.velocity.y >= 0;
 
     if (isGrounded && !this.wasGrounded) {
       this.lastLandedTime = currentTime;

@@ -140,17 +140,29 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       this.handleCratePickup(p, c)
     );
 
-    this.physics.add.overlap(this.playersGroup, this.projectiles, (p, proj) =>
-      this.handleHit(p, proj)
+    // We use a processCallback to COMPLETELY IGNORE physics checks between a player and their own projectiles.
+    // This prevents Arcade Physics from falsely populating `touching` properties (which resets jump counts).
+    const ignoreSelf = (p: any, hazard: any) => p.getData('entity').id !== hazard.getData('shooterId');
+
+    this.physics.add.overlap(this.playersGroup, this.projectiles, 
+      (p, proj) => this.handleHit(p, proj),
+      ignoreSelf,
+      this
     );
-    this.physics.add.overlap(this.playersGroup, this.rockets, (p, r) =>
-      this.handleHit(p, r, true)
+    this.physics.add.overlap(this.playersGroup, this.rockets, 
+      (p, r) => this.handleHit(p, r, true),
+      ignoreSelf,
+      this
     );
-    this.physics.add.overlap(this.playersGroup, this.solidBombs, (p, bomb) =>
-      this.handleHit(p, bomb)
+    this.physics.add.overlap(this.playersGroup, this.solidBombs, 
+      (p, bomb) => this.handleHit(p, bomb),
+      ignoreSelf,
+      this
     );
-    this.physics.add.overlap(this.playersGroup, this.meleeSlashes, (p, slash) =>
-      this.handleHit(p, slash, false)
+    this.physics.add.overlap(this.playersGroup, this.meleeSlashes, 
+      (p, slash) => this.handleHit(p, slash, false),
+      ignoreSelf,
+      this
     );
 
     this.scoreText = this.add.text(50, 50, '', {
@@ -197,6 +209,92 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       // Tells the Scene Manager to shut down the arena and boot the menu
       this.scene.start('MainMenuScene');
     });
+
+    this.createMobileHUD();
+  }
+  
+  private createMobileHUD() {
+    // Only show on touch devices
+    if (!this.sys.game.device.input.touch) return;
+
+    // We increase max pointers so multi-touch works flawlessly (e.g. holding run + shoot + jump)
+    this.input.addPointer(3);
+
+    const dispatchKey = (type: 'keydown' | 'keyup', keyName: string) => {
+      const keyCode = keyName.charCodeAt(0);
+      window.dispatchEvent(new KeyboardEvent(type, { 
+        key: keyName.toLowerCase(), 
+        code: `Key${keyName}`, 
+        keyCode: keyCode,
+        which: keyCode,
+        bubbles: true
+      }));
+    };
+
+    const createBtn = (x: number, y: number, text: string, keyNames: string[], radius: number = 60) => {
+      const circle = this.add.circle(x, y, radius, 0x333333, 0.6)
+        .setScrollFactor(0)
+        .setDepth(1000)
+        .setInteractive();
+
+      this.add.text(x, y, text, { fontSize: '32px', color: '#ffffff', fontStyle: 'bold' })
+        .setOrigin(0.5)
+        .setScrollFactor(0)
+        .setDepth(1001);
+
+      let isPressed = false;
+
+      const press = () => {
+        if (isPressed) return;
+        isPressed = true;
+        circle.setFillStyle(0x888888, 0.9);
+        keyNames.forEach(k => dispatchKey('keydown', k));
+      };
+
+      const release = () => {
+        if (!isPressed) return;
+        isPressed = false;
+        circle.setFillStyle(0x333333, 0.6);
+        keyNames.forEach(k => dispatchKey('keyup', k));
+      };
+
+      circle.on('pointerdown', press);
+      
+      // Allow sliding finger into the button
+      circle.on('pointerover', (pointer: Phaser.Input.Pointer) => {
+        if (pointer.isDown) press();
+      });
+
+      circle.on('pointerup', release);
+      circle.on('pointerout', release); // Allow sliding finger off the button
+
+      return circle;
+    };
+
+    // --- LEFT SIDE: D-PAD (W,A,S,D) & DIAGONALS ---
+    const baseX = 250;
+    const baseY = 800;
+    const spacing = 130;
+    const diag = 95; // Diagonal spacing (approx 130 * sin(45))
+
+    // Cardinals
+    createBtn(baseX, baseY - spacing, 'W', ['W']);       // UP
+    createBtn(baseX, baseY + spacing, 'S', ['S']);       // DOWN
+    createBtn(baseX - spacing, baseY, 'A', ['A']);       // LEFT
+    createBtn(baseX + spacing, baseY, 'D', ['D']);       // RIGHT
+
+    // Diagonals (Slightly smaller radius)
+    createBtn(baseX - diag, baseY - diag, '↖', ['W', 'A'], 50); // UP-LEFT
+    createBtn(baseX + diag, baseY - diag, '↗', ['W', 'D'], 50); // UP-RIGHT
+    createBtn(baseX - diag, baseY + diag, '↙', ['S', 'A'], 50); // DOWN-LEFT
+    createBtn(baseX + diag, baseY + diag, '↘', ['S', 'D'], 50); // DOWN-RIGHT
+
+    // --- RIGHT SIDE: SHOOT BUTTONS (T, Y) ---
+    // Primary Fire (T)
+    createBtn(1920 - 350, 850, 'PRI\n(T)', ['T'], 85);
+    
+    // Secondary Fire (Y)
+    createBtn(1920 - 150, 700, 'SEC\n(Y)', ['Y'], 65);
   }
 
   public buildArena(arenaId: string) {
