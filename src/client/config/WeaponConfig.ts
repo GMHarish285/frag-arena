@@ -24,10 +24,11 @@ export interface WeaponBlueprint {
   secondaryCooldown: number;
   primary: AttackConfig;
   secondary: AttackConfig;
+  model?: any;
 }
 
 export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
-  // 0: PISTOL (Default Starter Fallback Loadout)
+  // 0: STANDARD PISTOL (Infinite Ammo Sidearm)
   0: {
     id: 0,
     name: 'PISTOL',
@@ -37,6 +38,20 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     secondaryCooldown: 1000,
     primary: { damage: 10, speed: 1200, recoil: 250, kbX: 1200, kbY: 0 },
     secondary: { damage: 10, speed: 2200, speedY: -400, recoil: 0, kbX: 1000, kbY: -300 }, // Thrown weapon payload frame
+    model: {
+      pixelSize: 3,
+      gripOffset: { x: 6, y: 4 }, 
+      barrelOffset: { x: 12, y: 1 }, 
+      palette: { 'N': 0x00ffff },
+      data: [
+        "  NNNNNNNNNN ",
+        " N          N",
+        "  NNNNNNNN  N",
+        "      N   NN ",
+        "      N   N  ",
+        "      NNNN   "
+      ]
+    }
   },
 
   // 1: SMG (Submachine Gun Crate Drop)
@@ -49,18 +64,45 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     secondaryCooldown: 500,
     primary: { damage: 5, speed: 1800, recoil: 80, kbX: 800, kbY: 0, spread: 170 },
     secondary: { damage: 5, speed: 1800, recoil: 50, kbX: 800, kbY: 0, spread: 100 }, // Heavy tracer burst logic
+    model: {
+      pixelSize: 3,
+      gripOffset: { x: 6, y: 4 }, 
+      barrelOffset: { x: 15, y: 1 }, 
+      palette: { 'N': 0x00ffff },
+      data: [
+        "  NNNNNNNNNNNNN ",
+        " N             N",
+        "  NNNNNNNN   N N",
+        "      N  N N    ",
+        "      N  NN     ",
+        "      NNNN      "
+      ]
+    }
   },
 
   // 2: TACTICAL KNIFE (Melee / Bladed Fallback Drop Variant)
   2: {
     id: 2,
     name: 'KNIFE',
-    maxAmmo: Infinity, // Melee weapon frame that never depletes or locks down
+    maxAmmo: -1, // Melee weapon frame that never depletes or locks down
     tier: 'DEFAULT',
     primaryCooldown: 400,
     secondaryCooldown: 500,
     primary: { damage: 20, kbX: 1200, kbY: 0 }, // Melee sweep slice coordinates
     secondary: { damage: 15, speed: 3000, speedY: -350, kbX: 1500, kbY: 0 }, // Thrown dagger velocity profiles
+    model: {
+      pixelSize: 3,
+      gripOffset: { x: 3, y: 2 }, 
+      barrelOffset: { x: 12, y: 2 }, 
+      palette: { 'N': 0x00ffff },
+      data: [
+        "   NN        ",
+        "  N  NNNNNNN ",
+        " N          N",
+        "  N  NNNNNNN ",
+        "   NN        "
+      ]
+    }
   },
 
   // 3: EXPLOSIVE BOMB (Grenade/Mine Weapon Node)
@@ -89,6 +131,20 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
       isSolid: false,
       detonateDelay: 1000,
     }, // Proximity capsule bypass module
+    model: {
+      pixelSize: 3,
+      gripOffset: { x: 3, y: 2 }, 
+      barrelOffset: { x: 3, y: 2 }, 
+      palette: { 'N': 0x00ffff },
+      data: [
+        "   NN   ",
+        " N    N ",
+        "N      N",
+        "N      N",
+        " N    N ",
+        "   NN   "
+      ]
+    }
   },
 
   // 4: SNIPER RIFLE (High-Velocity Piercing Rail Variant)
@@ -101,6 +157,22 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     secondaryCooldown: 500,
     primary: { damage: 40, speed: 3500, recoil: 1200, kbX: 2400, kbY: 0 }, // Armor piercing heavy bullet trace
     secondary: { damage: 0 }, // Cloaking tracking loop hook (handled procedurally by player visibility)
+    model: {
+      pixelSize: 3,
+      gripOffset: { x: 6, y: 5 }, 
+      barrelOffset: { x: 24, y: 3 }, 
+      palette: { 'N': 0x00ffff },
+      data: [
+        "        NNNN    ",
+        "       N    N   ",
+        "  NNNNNNNNNNNNNNNNNNNNNN ",
+        " N                      N",
+        "  NNNNNNNN   N NNNNNNNNN ",
+        "      N   N N           ",
+        "      N   NN            ",
+        "      NNNN              "
+      ]
+    }
   },
 
   // 5: PARASOL UMBRELLA (Defensive Tactical Shield Asset)
@@ -113,6 +185,21 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     secondaryCooldown: 1500,
     primary: { damage: 18, kbX: 300, kbY: -300 }, // Steel rib jab melee tracking vector
     secondary: { damage: 0 }, // Blocking active parry tracking shield duration loop
+    model: {
+      pixelSize: 3,
+      gripOffset: { x: 2, y: 3 }, 
+      barrelOffset: { x: 9, y: 3 }, 
+      palette: { 'N': 0x00ffff },
+      data: [
+        "      N   ",
+        "      NN  ",
+        "      N N ",
+        "NNNNNNN  N",
+        "      N N ",
+        "      NN  ",
+        "      N   "
+      ]
+    }
   },
 
   // 6: COMBAT SHOTGUN (Symmetrical Multi-Pellet Scatter Blaster)
@@ -141,6 +228,20 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
       pellets: 5, // Total Damage = 120 point-blank
       spread: 150, // Massive vertical spread
     },
+    model: {
+      pixelSize: 3,
+      gripOffset: { x: 5, y: 4 }, 
+      barrelOffset: { x: 17, y: 1 }, 
+      palette: { 'N': 0x00ffff },
+      data: [
+        "  NNNNNNNNNNNNNNN ",
+        " N               N",
+        "  NNNNNNNN NNNNN N",
+        "     N    N       ",
+        "     N    N       ",
+        "     NNNNN        "
+      ]
+    }
   },
 
   // 7: HEAVY MACHINE GUN (Sustained Automatic Suppression Frame)
@@ -153,6 +254,20 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     secondaryCooldown: 300,
     primary: { damage: 7, speed: 1600, recoil: 120, kbX: 900, kbY: 0, spread: 50 }, // Rapid automatic fire cycles
     secondary: { damage: 18, kbX: 800, kbY: -100 }, // Heavy rifle stock butt-strike physical push
+    model: {
+      pixelSize: 3,
+      gripOffset: { x: 6, y: 4 }, 
+      barrelOffset: { x: 19, y: 1 }, 
+      palette: { 'N': 0x00ffff },
+      data: [
+        "   NNNNNNNNNNNNNNNN ",
+        "  N                N",
+        "   NNNNNNNNNNNNN   N",
+        "      N    NNN  NNN ",
+        "      N    NNNNNNNN ",
+        "      NNNN NNNN     "
+      ]
+    }
   },
 
   // 8: TACTICAL ROCKET LAUNCHER (Heavy Ballistic Blast Cannon)
@@ -178,8 +293,22 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
       recoil: 900,
       kbX: 800,
       kbY: -500,
-      homing: 0.015,
+      homing: 0.035,
     }, // Core guided tracking missile logic
+    model: {
+      pixelSize: 3,
+      gripOffset: { x: 6, y: 4 }, 
+      barrelOffset: { x: 19, y: 1 }, 
+      palette: { 'N': 0x00ffff },
+      data: [
+        "   NNNNNNNNNNNNNNNN ",
+        "  N                N",
+        "   NNNNNNNNNNNNNNNN ",
+        "      N    NN       ",
+        "      N    NN       ",
+        "      NNNNN         "
+      ]
+    }
   },
 
   // 9: COMPACT UZI (High-Spread Spray Machine Pistol)
@@ -199,5 +328,19 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
       kbY: 0,
       spread: 300,
     }, // Cone-based angular variance calculation
+    model: {
+      pixelSize: 3,
+      gripOffset: { x: 5, y: 4 }, 
+      barrelOffset: { x: 10, y: 1 }, 
+      palette: { 'N': 0x00ffff },
+      data: [
+        "  NNNNNNNN ",
+        " N        N",
+        "  NNNNNN  N",
+        "     N N  N",
+        "     N NNN ",
+        "     NNN   "
+      ]
+    }
   },
 };

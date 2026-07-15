@@ -13,7 +13,8 @@ export interface IArena {
     shooter: Player,
     kbX: number,
     kbY: number,
-    damage: number
+    damage: number,
+    angularVelocity?: number
   ): void;
   spawnBomb(
     x: number,
@@ -62,6 +63,7 @@ export interface IArena {
   updateAmmoUI(text: string): void;
   getTime(): number;
   addTimer(delay: number, callback: () => void, repeat?: number): void;
+  consumeGlobalAmmo(shooter: Player, amount: number): void;
 }
 
 export abstract class Weapon {
@@ -101,8 +103,8 @@ export abstract class Weapon {
     
     // Only the Pistol (id 0) uses internal magazines/reloads. Other weapons are 1-time use.
     if (weaponId !== 0) {
-      this.maxAmmo = Infinity;
-      this.currentAmmo = Infinity;
+      this.maxAmmo = -1;
+      this.currentAmmo = -1;
     }
 
     this.primaryCooldown = weaponStats.primaryCooldown;
@@ -118,7 +120,6 @@ export abstract class Weapon {
   public primaryAttack(shooter: Player) {
     if (
       this.isReloading ||
-      this.currentAmmo <= 0 ||
       this.scene.getTime() < this.lastPrimary
     )
       return;
@@ -129,7 +130,6 @@ export abstract class Weapon {
   public secondaryAttack(shooter: Player) {
     if (
       this.isReloading ||
-      this.currentAmmo <= 0 ||
       this.scene.getTime() < this.lastSecondary
     )
       return;
@@ -137,12 +137,16 @@ export abstract class Weapon {
     this.onSecondary(shooter);
   }
 
-  public triggerReload(duration: number = 1200) {
+  public triggerReload(duration: number = 1200, shooter?: Player) {
     // Safety exit check: Fallback defaults with Infinity capacity cannot enter reload sequences
-    if (this.isReloading || this.maxAmmo === Infinity) return;
+    if (this.isReloading || this.maxAmmo === -1) return;
 
     this.isReloading = true;
     this.scene.updateAmmoUI(`${this.name}: RELOADING...`);
+
+    if (shooter) {
+       shooter.equipWeapon(this.id, duration); // Draw the weapon slowly over the reload duration
+    }
 
     this.scene.addTimer(duration, () => {
       this.currentAmmo = this.maxAmmo;
@@ -151,23 +155,26 @@ export abstract class Weapon {
     });
   }
 
-  protected consumeAmmo(amount: number = 1) {
-    if (this.maxAmmo === Infinity) return;
+  protected consumeAmmo(amount: number = 1, shooter?: Player) {
+    if (this.maxAmmo === -1) return;
     this.currentAmmo -= amount;
     this.updateUI();
-    if (this.currentAmmo <= 0) this.triggerReload();
+    if (this.currentAmmo <= 0) this.triggerReload(1200, shooter);
   }
 
   public updateUI() {
-    const ammoStr = this.maxAmmo === Infinity ? '∞' : this.currentAmmo;
+    const ammoStr = this.maxAmmo === -1 ? '∞' : this.currentAmmo;
     this.scene.updateAmmoUI(
-      `${this.name}: ${ammoStr} / ${this.maxAmmo === Infinity ? '∞' : this.maxAmmo}`
+      `${this.name}: ${ammoStr} / ${this.maxAmmo === -1 ? '∞' : this.maxAmmo}`
     );
   }
 
   protected applyHorizontalRecoil(shooter: Player, force: number) {
     if (!shooter.sprite || !shooter.sprite.body) return;
     const knockbackDirection = shooter.facingDirection === 'RIGHT' ? -1 : 1;
+    
+    // Apply visual recoil to pull arms backward
+    shooter.applyVisualRecoil(Math.min(force * 0.05, 20));
     
     // Apply raw impulse. The new deterministic custom movement controller in Player.ts 
     // perfectly handles decay, drag, and speed caps without truncating impulses!

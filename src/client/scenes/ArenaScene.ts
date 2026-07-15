@@ -72,11 +72,14 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.meleeSlashes = this.physics.add.group();
 
     // Asset Generation
-    this.generateTexture('bullet_tex', 20, 8, 0xffd700);
-    this.generateTexture('pistol_thrown_tex', 30, 20, 0x555555);
-    this.generateTexture('knife_tex', 40, 10, 0xcccccc);
-    this.generateTexture('bomb_tex', 30, 30, 0xff0000);
-    this.generateTexture('rocket_tex', 40, 15, 0xff8800);
+    this.generateStripedBulletTexture('bullet_small_tex', 24, 6, 0x0055aa, 0x00ffff);
+    this.generateStripedBulletTexture('bullet_smg_tex', 40, 6, 0x0055aa, 0x00ffff);
+    this.generateStripedBulletTexture('bullet_medium_tex', 32, 10, 0x0055aa, 0x00ffff);
+    this.generateStripedBulletTexture('bullet_large_tex', 48, 14, 0x0055aa, 0x00ffff);
+    this.generateWeaponTexture(0, 'pistol_thrown_tex'); // Dynamically generate from WeaponConfig model
+    this.generateWeaponTexture(2, 'knife_tex');
+    this.generateWeaponTexture(3, 'bomb_tex');
+    this.generateBetterRocketTexture('rocket_tex');
     this.generateTexture('slash_tex', 60, 60, 0xffffff);
     this.generateTexture('crate_tex', 32, 32, 0xd2b48c); // Supply Crate
 
@@ -108,6 +111,9 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       100,
       10
     );
+
+    this.player1.equipWeapon(0);
+    this.dummy.equipWeapon(0);
 
     this.playersGroup.add(this.player1.sprite);
     this.playersGroup.add(this.dummy.sprite);
@@ -406,6 +412,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       this.dummyAmmo = ammo;
     }
     
+    player.equipWeapon(index);
+    
     // Refill the internal weapon ammo when equipping
     const weapon = this.weapons[index];
     if (weapon) {
@@ -415,13 +423,17 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     }
   }
 
-  private consumeAmmo(shooter: Player, amount: number) {
+  public consumeGlobalAmmo(shooter: Player, amount: number) {
     if (shooter.id === this.player1.id && this.p1WeaponIndex !== 0) {
-      this.p1Ammo -= amount;
-      if (this.p1Ammo <= 0) this.giveWeaponToPlayer(shooter, 0); // Revert to Pistol
+      if (this.p1Ammo !== -1 && this.p1Ammo !== null) {
+        this.p1Ammo -= amount;
+        if (this.p1Ammo <= 0) this.giveWeaponToPlayer(shooter, 0); // Revert to Pistol
+      }
     } else if (shooter.id === this.dummy.id && this.dummyWeaponIndex !== 0) {
-      this.dummyAmmo -= amount;
-      if (this.dummyAmmo <= 0) this.giveWeaponToPlayer(shooter, 0);
+      if (this.dummyAmmo !== -1 && this.dummyAmmo !== null) {
+        this.dummyAmmo -= amount;
+        if (this.dummyAmmo <= 0) this.giveWeaponToPlayer(shooter, 0);
+      }
     }
   }
 
@@ -474,7 +486,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
             ? this.p1WeaponIndex
             : this.dummyWeaponIndex;
         if (wepIndex === 5) {
-          this.consumeAmmo(player, damage); // umbrella breaks if ammo reaches 0
+          this.consumeGlobalAmmo(player, damage); // umbrella breaks if ammo reaches 0
         }
 
         if (destroyHazard) hazard.destroy();
@@ -517,7 +529,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     shooter: Player,
     kbX: number,
     kbY: number,
-    damage: number
+    damage: number,
+    angularVelocity: number = 0
   ) {
     const proj = this.projectiles.create(
       x,
@@ -533,10 +546,14 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     proj.setData('damage', damage);
     proj.setData('isExplosive', false);
 
+    if (angularVelocity !== 0) {
+      proj.setAngularVelocity(angularVelocity);
+    }
+
     this.uiCamera.ignore(proj);
 
     // Consume Ammo (Works perfectly for guns & Knife Throws)
-    this.consumeAmmo(shooter, 1);
+    this.consumeGlobalAmmo(shooter, 1);
   }
 
   spawnRocket(
@@ -567,7 +584,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
 
     this.uiCamera.ignore(r);
 
-    this.consumeAmmo(shooter, 1);
+    this.consumeGlobalAmmo(shooter, 1);
     this.time.delayedCall(2500, () => this.detonateExplosive(r));
   }
 
@@ -602,7 +619,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
 
     this.uiCamera.ignore(bomb);
 
-    this.consumeAmmo(shooter, 1);
+    this.consumeGlobalAmmo(shooter, 1);
     this.time.delayedCall(detonateDelay, () => {
       if (bomb.active) this.detonateExplosive(bomb);
     });
@@ -624,7 +641,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       'slash_tex'
     ) as Phaser.Physics.Arcade.Sprite;
     (slash.body as any).allowGravity = false;
-    slash.setAlpha(0.8);
+    slash.setVisible(false);
     slash.setData('shooterId', shooter.id);
     slash.setData('teamId', shooter.teamId);
     slash.setData('kbX', facing === 'RIGHT' ? kbX : -kbX);
@@ -662,7 +679,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     ) as Phaser.Physics.Arcade.Sprite;
     (blast.body as any).allowGravity = false;
     blast.setDisplaySize(range, spread); // Scale the texture to visually represent the AOE
-    blast.setAlpha(0.6);
+    blast.setVisible(false);
     blast.setData('shooterId', shooter.id);
     blast.setData('teamId', shooter.teamId);
     blast.setData('kbX', facing === 'RIGHT' ? kbX : -kbX);
@@ -675,11 +692,33 @@ export class ArenaScene extends Phaser.Scene implements IArena {
 
     this.uiCamera.ignore(blast);
 
+    // Visuals using Blitter for multiple pellets
+    const blitter = this.add.blitter(0, 0, 'bullet_medium_tex');
+    const visualPellets = 10;
+    for(let i = 0; i < visualPellets; i++) {
+        const targetX = x + (facing === 'RIGHT' ? range : -range) * Phaser.Math.FloatBetween(0.3, 1);
+        const targetY = y + Phaser.Math.FloatBetween(-spread/2, spread/2);
+        
+        const bob = blitter.create(x, y);
+        this.tweens.add({
+            targets: bob,
+            x: targetX,
+            y: targetY,
+            alpha: 0,
+            duration: 150,
+            ease: 'Sine.easeOut'
+        });
+    }
+    this.uiCamera.ignore(blitter);
+
     this.tweens.add({
       targets: blast,
       alpha: 0,
       duration: 150,
-      onComplete: () => blast.destroy(),
+      onComplete: () => {
+        blast.destroy();
+        blitter.destroy();
+      },
     });
   }
 
@@ -763,7 +802,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
         if (wep.isReloading) return 'RELOADING...';
         return `${wep.currentAmmo} / ∞`;
       }
-      return `${globalAmmo}`;
+      return (globalAmmo === -1 || globalAmmo === null) ? '∞' : `${globalAmmo}`;
     };
 
     this.scoreText.setText(
@@ -871,6 +910,81 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     g.fillStyle(color);
     g.fillRect(0, 0, w, h);
     g.generateTexture(key, w, h);
+    g.destroy();
+  }
+
+  private generateStripedBulletTexture(key: string, width: number, height: number, outerColor: number, innerColor: number) {
+    const g = this.add.graphics();
+    g.fillStyle(outerColor, 1);
+    g.fillRect(0, 0, width, height);
+    
+    const stripeHeight = Math.max(2, Math.floor(height / 3));
+    const stripeY = Math.floor((height - stripeHeight) / 2);
+    g.fillStyle(innerColor, 1);
+    g.fillRect(0, stripeY, width, stripeHeight);
+    
+    g.generateTexture(key, width, height);
+    g.destroy();
+  }
+
+  private generateWeaponTexture(id: number, key: string) {
+    const weaponConfig = GameConfig.weapons[id];
+    if (!weaponConfig || !weaponConfig.model) return;
+    
+    const model = weaponConfig.model;
+    const pxSize = model.pixelSize;
+    
+    const width = model.data[0].length * pxSize;
+    const height = model.data.length * pxSize;
+    
+    const g = this.add.graphics();
+    for (let y = 0; y < model.data.length; y++) {
+      const row = model.data[y];
+      for (let x = 0; x < row.length; x++) {
+        const char = row[x];
+        if (char !== ' ') {
+          const color = model.palette[char];
+          if (color !== undefined) {
+             g.fillStyle(color, 1);
+             g.fillRect(x * pxSize, y * pxSize, pxSize, pxSize);
+          }
+        }
+      }
+    }
+    
+    g.generateTexture(key, width, height);
+    g.destroy();
+  }
+
+  private generateBetterRocketTexture(key: string) {
+    const g = this.add.graphics();
+    const pxSize = 3;
+    
+    // Tail / fire
+    g.fillStyle(0xff4500, 1);
+    g.fillRect(0 * pxSize, 2 * pxSize, 2 * pxSize, 2 * pxSize);
+    g.fillStyle(0xffa500, 1);
+    g.fillRect(1 * pxSize, 2 * pxSize, 2 * pxSize, 2 * pxSize);
+    
+    // Body (Cyan)
+    g.fillStyle(0x00ffff, 1);
+    g.fillRect(3 * pxSize, 1 * pxSize, 6 * pxSize, 4 * pxSize);
+    
+    // Darker details
+    g.fillStyle(0x555555, 1);
+    g.fillRect(4 * pxSize, 2 * pxSize, 4 * pxSize, 2 * pxSize);
+    
+    // Fins
+    g.fillStyle(0x333333, 1);
+    g.fillRect(2 * pxSize, 0 * pxSize, 2 * pxSize, 2 * pxSize); // top fin
+    g.fillRect(2 * pxSize, 4 * pxSize, 2 * pxSize, 2 * pxSize); // bottom fin
+    
+    // Tip (Red)
+    g.fillStyle(0xff0000, 1);
+    g.fillRect(9 * pxSize, 2 * pxSize, 2 * pxSize, 2 * pxSize);
+    g.fillRect(11 * pxSize, 2.5 * pxSize, 1 * pxSize, 1 * pxSize);
+
+    g.generateTexture(key, 12 * pxSize, 6 * pxSize);
     g.destroy();
   }
 

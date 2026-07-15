@@ -8,7 +8,7 @@ export class SMG extends Weapon {
     }
 
     override onPrimary(shooter: Player) {
-        if (this.currentAmmo <= 0) return;
+        if (this.currentAmmo !== -1 && this.currentAmmo <= 0) return;
         
         const stats = this.config.primary;
         const playerSprite = shooter.sprite;
@@ -17,13 +17,15 @@ export class SMG extends Weapon {
         const spread = stats.spread ?? 0;
         const dirY = spread > 0 ? Phaser.Math.Between(-spread / 2, spread / 2) : 0;
         
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
         // Fast, light bullets driven by configuration
         this.scene.spawnProjectile(
-            playerSprite.x, 
-            playerSprite.y + 10, 
+            spawnPos.x, 
+            spawnPos.y, 
             dirX, 
             dirY, 
-            'bullet_tex', 
+            'bullet_smg_tex', 
             false, 
             shooter, 
             stats.kbX ?? 90, 
@@ -35,7 +37,7 @@ export class SMG extends Weapon {
     }
 
     override onSecondary(shooter: Player) {
-        if (this.currentAmmo <= 0) return; 
+        if (this.currentAmmo !== -1 && this.currentAmmo <= 0) return; 
         
         const stats = this.config.secondary;
         const speed = stats.speed ?? 1800;
@@ -47,17 +49,18 @@ export class SMG extends Weapon {
         const spread = stats.spread ?? 0;
 
         const fireBurstShot = () => {
-            if (this.currentAmmo > 0 && !this.isReloading) {
-                const playerSprite = shooter.sprite;
+            if (!this.isReloading) {
                 const dirX = shooter.facingDirection === 'RIGHT' ? speed : -speed;
                 const dirY = spread > 0 ? Phaser.Math.Between(-spread / 2, spread / 2) : 0;
                 
+                const spawnPos = shooter.getWeaponBarrelPosition();
+
                 this.scene.spawnProjectile(
-                    playerSprite.x, 
-                    playerSprite.y + 10, 
+                    spawnPos.x, 
+                    spawnPos.y, 
                     dirX, 
                     dirY, 
-                    'bullet_tex', 
+                    'bullet_smg_tex', 
                     false, 
                     shooter, 
                     kbX, 

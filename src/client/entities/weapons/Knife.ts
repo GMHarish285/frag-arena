@@ -20,6 +20,7 @@ export class Knife extends Weapon {
             stats.kbY ?? -200, 
             stats.damage
         );
+        shooter.playStabAnimation();
     }
 
     override onSecondary(shooter: Player) {

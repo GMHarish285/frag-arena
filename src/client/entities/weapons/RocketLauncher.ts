@@ -7,16 +7,18 @@ export class RocketLauncher extends Weapon {
     }
 
     override onPrimary(shooter: Player) {
-        if (this.currentAmmo <= 0) return;
+        if (this.currentAmmo !== -1 && this.currentAmmo <= 0) return;
         
         const stats = this.config.primary;
         const playerSprite = shooter.sprite;
         const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 800) : -(stats.speed ?? 800);
         
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
         // Standard payload driven by config parameters
         this.scene.spawnRocket(
-            playerSprite.x, 
-            playerSprite.y, 
+            spawnPos.x, 
+            spawnPos.y, 
             dirX, 
             0, 
             shooter, 
@@ -30,16 +32,18 @@ export class RocketLauncher extends Weapon {
     }
 
     override onSecondary(shooter: Player) {
-        if (this.currentAmmo <= 0) return;
+        if (this.currentAmmo !== -1 && this.currentAmmo <= 0) return;
         
         const stats = this.config.secondary;
         const playerSprite = shooter.sprite;
         const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 600) : -(stats.speed ?? 600);
         
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
         // Advanced tracking rocket driven by config parameters
         this.scene.spawnRocket(
-            playerSprite.x, 
-            playerSprite.y, 
+            spawnPos.x, 
+            spawnPos.y, 
             dirX, 
             stats.speedY ?? -200, 
             shooter, 

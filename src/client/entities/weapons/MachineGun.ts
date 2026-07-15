@@ -8,7 +8,7 @@ export class MachineGun extends Weapon {
     }
 
     override onPrimary(shooter: Player) {
-        if (this.currentAmmo <= 0) return;
+        if (this.currentAmmo !== -1 && this.currentAmmo <= 0) return;
         
         const stats = this.config.primary;
         const playerSprite = shooter.sprite;
@@ -17,13 +17,15 @@ export class MachineGun extends Weapon {
         const spreadRange = stats.spread ?? 50;
         const randomVy = Phaser.Math.Between(-spreadRange, spreadRange);
         
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
         // Sustained heavy suppression rounds driven by config parameters
         this.scene.spawnProjectile(
-            playerSprite.x, 
-            playerSprite.y + 10, 
+            spawnPos.x, 
+            spawnPos.y, 
             dirX, 
             randomVy, 
-            'bullet_tex', 
+            'bullet_medium_tex', 
             false, 
             shooter, 
             stats.kbX ?? 120, 
@@ -38,15 +40,18 @@ export class MachineGun extends Weapon {
         const stats = this.config.secondary;
         const playerSprite = shooter.sprite;
         
-        // Heavy rifle stock butt-strike driven by config
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
+        // Heavy rifle stock butt-strike sweep driven by config
         this.scene.spawnMeleeSlash(
-            playerSprite.x, 
-            playerSprite.y, 
+            spawnPos.x, 
+            spawnPos.y, 
             shooter.facingDirection, 
             shooter, 
             stats.kbX ?? 400, 
             stats.kbY ?? -100, 
             stats.damage
         );
+        shooter.playHitAnimation();
     }
 }

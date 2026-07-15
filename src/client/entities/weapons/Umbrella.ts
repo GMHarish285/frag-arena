@@ -20,6 +20,7 @@ export class Umbrella extends Weapon {
             stats.kbY ?? -300, 
             stats.damage
         );
+        shooter.playSweepAnimation();
     }
 
     override onSecondary(shooter: Player) {
@@ -30,8 +31,10 @@ export class Umbrella extends Weapon {
         // Keep the umbrella open and active as long as the secondary button (Y) is held
         if (keys && keys.Y && keys.Y.isDown) {
             shooter.isBlocking = true;
+            shooter.weaponScale = 2; // Expand the umbrella to cover the side
         } else {
             shooter.isBlocking = false;
+            shooter.weaponScale = 1;
         }
     }
 }

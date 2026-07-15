@@ -9,7 +9,7 @@ export class BombWeapon extends Weapon {
     }
 
     override onPrimary(shooter: Player) {
-        if (this.currentAmmo <= 0) return;
+        if (this.currentAmmo !== -1 && this.currentAmmo <= 0) return;
         
         const stats = this.config.primary;
         const playerSprite = shooter.sprite;
@@ -24,10 +24,12 @@ export class BombWeapon extends Weapon {
             dirY = Math.sin(rad) * speed;
         }
         
+        const spawnPos = shooter.getWeaponBarrelPosition();
+        
         // Standard high explosive bouncing mine driven by config
         this.scene.spawnBomb(
-            playerSprite.x, 
-            playerSprite.y - 20, 
+            spawnPos.x, 
+            spawnPos.y, 
             dirX, 
             dirY, 
             stats.isSolid ?? true, 
@@ -38,10 +40,11 @@ export class BombWeapon extends Weapon {
             stats.detonateDelay ?? 2000
         );
         this.consumeAmmo(1);
+        shooter.playThrowAnimation();
     }
 
     override onSecondary(shooter: Player) {
-        if (this.currentAmmo <= 0) return;
+        if (this.currentAmmo !== -1 && this.currentAmmo <= 0) return;
         
         const stats = this.config.secondary;
         const playerSprite = shooter.sprite;
@@ -56,10 +59,12 @@ export class BombWeapon extends Weapon {
             dirY = Math.sin(rad) * speed;
         }
         
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
         // Phasing phantom proximity blast capsule driven by config
         this.scene.spawnBomb(
-            playerSprite.x, 
-            playerSprite.y - 20, 
+            spawnPos.x, 
+            spawnPos.y, 
             dirX, 
             dirY, 
             stats.isSolid ?? false, 
@@ -70,5 +75,6 @@ export class BombWeapon extends Weapon {
             stats.detonateDelay ?? 2000
         );
         this.consumeAmmo(1);
+        shooter.playThrowAnimation();
     }
 }

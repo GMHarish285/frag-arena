@@ -7,7 +7,7 @@ export class Shotgun extends Weapon {
     }
 
     override onPrimary(shooter: Player) {
-        if (this.currentAmmo < 1) return;
+        if (this.currentAmmo !== -1 && this.currentAmmo < 1) return;
         const stats = this.config.primary;
         
         const pellets = stats.pellets ?? 3;
@@ -15,9 +15,11 @@ export class Shotgun extends Weapon {
         const spread = stats.spread ?? 200; // Vertical height of the AOE blast
         const totalDamage = (stats.damage ?? 12) * pellets;
 
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
         this.scene.spawnShotgunBlast(
-            shooter.sprite.x, 
-            shooter.sprite.y, 
+            spawnPos.x, 
+            spawnPos.y, 
             shooter.facingDirection, 
             shooter, 
             stats.kbX ?? 800, 
@@ -28,11 +30,11 @@ export class Shotgun extends Weapon {
         );
 
         this.applyHorizontalRecoil(shooter, stats.recoil ?? 250); 
-        this.consumeAmmo(1);
+        this.scene.consumeGlobalAmmo(shooter, 1);
     }
 
     override onSecondary(shooter: Player) {
-        if (this.currentAmmo < 2) return;
+        if (this.currentAmmo !== -1 && this.currentAmmo < 2) return;
         const stats = this.config.secondary;
 
         const pellets = stats.pellets ?? 5;
@@ -40,9 +42,11 @@ export class Shotgun extends Weapon {
         const spread = stats.spread ?? 400;
         const totalDamage = (stats.damage ?? 15) * pellets;
 
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
         this.scene.spawnShotgunBlast(
-            shooter.sprite.x, 
-            shooter.sprite.y, 
+            spawnPos.x, 
+            spawnPos.y, 
             shooter.facingDirection, 
             shooter, 
             stats.kbX ?? 1500, 
@@ -53,6 +57,6 @@ export class Shotgun extends Weapon {
         );
 
         this.applyHorizontalRecoil(shooter, stats.recoil ?? 400); 
-        this.consumeAmmo(2);
+        this.scene.consumeGlobalAmmo(shooter, 2);
     }
 }

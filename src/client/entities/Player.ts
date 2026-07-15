@@ -41,6 +41,21 @@ export class Player {
 
   public isKnockedBack: boolean = false;
 
+  public activeWeaponId: number = 0;
+  public weaponDrawProgress: number = 1;
+  public weaponScale: number = 1;
+  public recoilOffset: number = 0;
+  
+  public frontArmOffsetX: number = 0;
+  public frontArmOffsetY: number = 0;
+  public backArmOffsetX: number = 0;
+  public backArmOffsetY: number = 0;
+  public armAnimRotation: number = 0;
+
+  private weaponDrawTween: Phaser.Tweens.Tween | null = null;
+  private recoilTween: Phaser.Tweens.Tween | null = null;
+  public lastFrontHandPosition: Joint | null = null;
+
   constructor(
     scene: Phaser.Scene,
     x: number,
@@ -97,6 +112,66 @@ export class Player {
         this.sprite.destroy();
       }
     }
+  }
+
+  public equipWeapon(weaponId: number, duration: number = 300) {
+    if (this.activeWeaponId === weaponId && this.weaponDrawProgress === 1 && duration === 300) return;
+    this.activeWeaponId = weaponId;
+    this.weaponDrawProgress = 0;
+    
+    if (this.weaponDrawTween) {
+      this.weaponDrawTween.stop();
+    }
+    
+    this.weaponDrawTween = this.sprite.scene.tweens.add({
+      targets: this,
+      weaponDrawProgress: 1,
+      duration: duration, 
+      ease: 'Linear'
+    });
+  }
+
+  public applyVisualRecoil(amount: number) {
+    this.recoilOffset = amount;
+    if (this.recoilTween) this.recoilTween.stop();
+    this.recoilTween = this.sprite.scene.tweens.add({
+        targets: this,
+        recoilOffset: 0,
+        duration: 150,
+        ease: 'Sine.easeOut'
+    });
+  }
+
+  public getWeaponBarrelPosition(): { x: number, y: number } {
+    const isRight = this.facingDirection === 'RIGHT';
+    const directionSign = isRight ? 1 : -1;
+    
+    if (!this.lastFrontHandPosition) {
+       return { x: this.sprite.x, y: this.sprite.y + 10 };
+    }
+    
+    const weaponConfig = GameConfig.weapons[this.activeWeaponId];
+    if (weaponConfig && weaponConfig.model) {
+      const model = weaponConfig.model;
+      const offsetX = (model.barrelOffset.x - model.gripOffset.x) * model.pixelSize * directionSign;
+      // Apply rotation to the barrel offset if armAnimRotation is active
+      const cosR = Math.cos(this.armAnimRotation * directionSign);
+      const sinR = Math.sin(this.armAnimRotation * directionSign);
+      
+      const px = (model.barrelOffset.x - model.gripOffset.x) * model.pixelSize;
+      const py = (model.barrelOffset.y - model.gripOffset.y) * model.pixelSize;
+      
+      const rotX = px * cosR - py * sinR;
+      const rotY = px * sinR + py * cosR;
+      
+      // We push the spawn position slightly forward based on direction so it doesn't spawn inside the barrel graphics
+      return { 
+        x: this.lastFrontHandPosition.x + (directionSign * rotX) + (directionSign * model.pixelSize),
+        y: this.lastFrontHandPosition.y + rotY + (model.pixelSize / 2) // center of pixel
+      };
+    }
+    
+    return this.lastFrontHandPosition;
   }
 
   /**
@@ -162,15 +237,19 @@ export class Player {
     const isRight = this.facingDirection === 'RIGHT';
     const directionSign = isRight ? 1 : -1;
 
+    // Apply visual recoil to pull arms backward
+    const recoilX = this.recoilOffset * -directionSign;
+
     // 2. ARMS: Dynamic IK Execution
     const backHandTarget: Joint = {
-      x: neck.x + directionSign * 32,
-      y: neck.y + 14,
+      x: neck.x + directionSign * 32 + recoilX + this.backArmOffsetX * directionSign,
+      y: neck.y + 14 + this.backArmOffsetY,
     };
     const frontHandTarget: Joint = {
-      x: neck.x + directionSign * 45,
-      y: neck.y + 8,
+      x: neck.x + directionSign * 45 + recoilX + this.frontArmOffsetX * directionSign,
+      y: neck.y + 8 + this.frontArmOffsetY,
     };
+    this.lastFrontHandPosition = frontHandTarget;
 
     const backElbow = this.solveIK(
       neck,
@@ -196,6 +275,60 @@ export class Player {
       frontHandTarget.x,
       frontHandTarget.y
     );
+
+    // DRAW EQUIPPED WEAPON PIXEL BY PIXEL
+    const weaponConfig = GameConfig.weapons[this.activeWeaponId];
+    if (weaponConfig && weaponConfig.model) {
+      const model = weaponConfig.model;
+      const basePxSize = model.pixelSize;
+      const pxSize = basePxSize * this.weaponScale;
+      
+      const totalPixels = model.data.reduce((acc: number, row: string) => acc + row.trim().length, 0);
+      const pixelsToDraw = Math.floor(totalPixels * this.weaponDrawProgress);
+      
+      let drawnCount = 0;
+      for (let y = 0; y < model.data.length; y++) {
+        const row = model.data[y];
+        for (let x = 0; x < row.length; x++) {
+          const char = row[x];
+          if (char !== ' ') {
+            if (drawnCount >= pixelsToDraw) break; // pixel by pixel effect
+            
+            const color = model.palette[char];
+            if (color !== undefined) {
+               g.fillStyle(color, currentAlpha);
+               const baseOffsetX = (x - model.gripOffset.x) * pxSize * directionSign;
+               const baseOffsetY = (y - model.gripOffset.y) * pxSize;
+               
+               // Apply rotation
+               const cosR = Math.cos(this.armAnimRotation * directionSign);
+               const sinR = Math.sin(this.armAnimRotation * directionSign);
+          
+               const rx = baseOffsetX * cosR - baseOffsetY * sinR;
+               const ry = baseOffsetX * sinR + baseOffsetY * cosR;
+
+               const drawX = frontHandTarget.x + rx - (isRight ? 0 : pxSize);
+               const drawY = frontHandTarget.y + ry;
+
+               g.fillStyle(color, currentAlpha);
+               g.fillRect(drawX, drawY, pxSize, pxSize);
+            }
+            drawnCount++;
+          }
+        }
+      }
+    }
+
+    if (this.isBlocking && this.activeWeaponId === 5) {
+      g.lineStyle(3, 0x00ffff, 0.6);
+      g.fillStyle(0x00ffff, 0.2);
+      const shieldX = px + directionSign * 35 - (isRight ? 0 : 20);
+      g.fillRoundedRect(shieldX, py - 45, 20, 100, 10);
+      g.strokeRoundedRect(shieldX, py - 45, 20, 100, 10);
+
+      g.lineStyle(4, 0xffffff, currentAlpha);
+      g.fillStyle(0xffffff, currentAlpha);
+    }
 
     // 3. LEGS: Procedural Walk Cycle & Jump Pose Math
     const groundY = py + 47.5;
@@ -309,7 +442,151 @@ export class Player {
 
   public toggleInvisibility() {
     this.isInvisible = !this.isInvisible;
-    this.sprite.setAlpha(this.isInvisible ? 0.15 : 1);
+  }
+
+  public playStabAnimation() {
+    const scene = this.sprite.scene;
+    scene.tweens.add({
+      targets: this,
+      frontArmOffsetX: -15,
+      backArmOffsetX: -10,
+      duration: 80,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        scene.tweens.add({
+          targets: this,
+          frontArmOffsetX: 40,
+          backArmOffsetX: 20,
+          duration: 60,
+          ease: 'Power2',
+          yoyo: true,
+          hold: 30,
+          onComplete: () => {
+            scene.tweens.add({
+              targets: this,
+              frontArmOffsetX: 0,
+              backArmOffsetX: 0,
+              duration: 100,
+            });
+          }
+        });
+      }
+    });
+  }
+
+  public playSweepAnimation() {
+    const scene = this.sprite.scene;
+    scene.tweens.add({
+      targets: this,
+      armAnimRotation: -Math.PI / 1.5, 
+      frontArmOffsetY: -50,           
+      backArmOffsetY: -50,
+      duration: 100,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        scene.tweens.add({
+          targets: this,
+          armAnimRotation: Math.PI / 4, 
+          frontArmOffsetY: 20,           
+          backArmOffsetY: 20,
+          frontArmOffsetX: 30,           
+          backArmOffsetX: 30,
+          duration: 100,
+          ease: 'Power2',
+          onComplete: () => {
+            scene.tweens.add({
+              targets: this,
+              armAnimRotation: 0,
+              frontArmOffsetY: 0,
+              backArmOffsetY: 0,
+              frontArmOffsetX: 0,
+              backArmOffsetX: 0,
+              duration: 150,
+              ease: 'Sine.easeInOut'
+            });
+          }
+        });
+      }
+    });
+  }
+
+  public playThrowAnimation() {
+    const scene = this.sprite.scene;
+    
+    // Natural throwing posture for the other hand (back hand)
+    scene.tweens.add({
+      targets: this,
+      backArmOffsetX: -15,
+      backArmOffsetY: 10,
+      duration: 150,
+      yoyo: true,
+      hold: 100
+    });
+
+    // Front hand throws
+    scene.tweens.add({
+      targets: this,
+      frontArmOffsetX: -20,
+      frontArmOffsetY: -20, 
+      armAnimRotation: -Math.PI / 4,
+      duration: 100,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        scene.tweens.add({
+          targets: this,
+          frontArmOffsetX: 30,
+          frontArmOffsetY: 10, 
+          armAnimRotation: Math.PI / 6,
+          duration: 80,
+          ease: 'Power2',
+          onComplete: () => {
+            scene.tweens.add({
+              targets: this,
+              frontArmOffsetX: 0,
+              frontArmOffsetY: 0,
+              armAnimRotation: 0,
+              duration: 150,
+            });
+          }
+        });
+      }
+    });
+  }
+
+  public playHitAnimation() {
+    const scene = this.sprite.scene;
+    // Wind up
+    scene.tweens.add({
+      targets: this,
+      frontArmOffsetX: -20,
+      backArmOffsetX: -20,
+      armAnimRotation: -Math.PI / 16,
+      duration: 80,
+      ease: 'Sine.easeOut',
+      onComplete: () => {
+        // Strike hard
+        scene.tweens.add({
+          targets: this,
+          frontArmOffsetX: 50,
+          backArmOffsetX: 40,
+          armAnimRotation: Math.PI / 6, 
+          duration: 60,
+          ease: 'Power2',
+          yoyo: true,
+          hold: 20,
+          onComplete: () => {
+            // Recover
+            scene.tweens.add({
+              targets: this,
+              frontArmOffsetX: 0,
+              backArmOffsetX: 0,
+              armAnimRotation: 0,
+              duration: 100,
+            });
+          }
+        });
+      }
+    });
   }
 
   public update(keys?: any, delta: number = 16.66) {

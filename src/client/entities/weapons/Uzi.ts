@@ -8,7 +8,7 @@ export class Uzi extends Weapon {
     }
 
     override onPrimary(shooter: Player) {
-        if (this.isReloading || this.currentAmmo <= 0) return;
+        if (this.isReloading || (this.currentAmmo !== -1 && this.currentAmmo <= 0)) return;
         
         const stats = this.config.primary;
         const playerSprite = shooter.sprite;
@@ -17,13 +17,15 @@ export class Uzi extends Weapon {
         const spreadRange = stats.spread ?? 150;
         const randomVy = Phaser.Math.Between(-spreadRange, spreadRange);
 
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
         // Straight-shot spray mechanics driven by config numbers
         this.scene.spawnProjectile(
-            playerSprite.x, 
-            playerSprite.y + 10, 
+            spawnPos.x, 
+            spawnPos.y, 
             dirX, 
             randomVy, 
-            'bullet_tex', 
+            'bullet_small_tex', 
             false, 
             shooter, 
             stats.kbX ?? 80, 
@@ -35,7 +37,7 @@ export class Uzi extends Weapon {
     }
 
     override onSecondary(shooter: Player) {
-        if (this.isReloading || this.currentAmmo <= 0) return;
+        if (this.isReloading || (this.currentAmmo !== -1 && this.currentAmmo <= 0)) return;
         
         const stats = this.config.secondary;
         const playerSprite = shooter.sprite;
@@ -46,13 +48,15 @@ export class Uzi extends Weapon {
         const randomVy = Phaser.Math.Between(-spreadRange, spreadRange);
         const speed = stats.speed ?? 1000;
         
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
         // Wild angled cone projectiles driven by config numbers
         this.scene.spawnProjectile(
-            playerSprite.x, 
-            playerSprite.y + 10, 
+            spawnPos.x, 
+            spawnPos.y, 
             speed * dir, 
             randomVy, 
-            'bullet_tex', 
+            'bullet_small_tex', 
             false, 
             shooter, 
             stats.kbX ?? 100, 

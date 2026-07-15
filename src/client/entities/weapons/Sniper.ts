@@ -7,19 +7,20 @@ export class Sniper extends Weapon {
     }
 
     override onPrimary(shooter: Player) {
-        if (this.currentAmmo <= 0) return;
+        if (this.currentAmmo !== -1 && this.currentAmmo <= 0) return;
         
         const stats = this.config.primary;
         const playerSprite = shooter.sprite;
         const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 2500) : -(stats.speed ?? 2500);
-        
+        const spawnPos = shooter.getWeaponBarrelPosition();
+
         // High-velocity armor piercing round driven by configuration parameters
         this.scene.spawnProjectile(
-            playerSprite.x, 
-            playerSprite.y, 
+            spawnPos.x, 
+            spawnPos.y, 
             dirX, 
             0, 
-            'bullet_tex', 
+            'bullet_large_tex', 
             false, 
             shooter, 
             stats.kbX ?? 800, 
