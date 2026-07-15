@@ -40,7 +40,7 @@ export class Pistol extends Weapon {
             playerSprite.x, 
             playerSprite.y, 
             dirX, 
-            0, 
+            stats.speedY ?? -300, 
             'pistol_thrown_tex', 
             true, 
             shooter, 

@@ -24,7 +24,8 @@ export interface IArena {
     shooter: Player,
     kbX: number,
     kbY: number,
-    damage: number
+    damage: number,
+    detonateDelay: number
   ): void;
   spawnMeleeSlash(
     x: number,
@@ -34,6 +35,17 @@ export interface IArena {
     kbX: number,
     kbY: number,
     damage: number
+  ): void;
+  spawnShotgunBlast(
+    x: number,
+    y: number,
+    facing: 'LEFT' | 'RIGHT',
+    shooter: Player,
+    kbX: number,
+    kbY: number,
+    damage: number,
+    range: number,
+    spread: number
   ): void;
   spawnRocket(
     x: number,
@@ -86,12 +98,22 @@ export abstract class Weapon {
     this.name = weaponStats.name;
     this.maxAmmo = weaponStats.maxAmmo;
     this.currentAmmo = weaponStats.maxAmmo;
+    
+    // Only the Pistol (id 0) uses internal magazines/reloads. Other weapons are 1-time use.
+    if (weaponId !== 0) {
+      this.maxAmmo = Infinity;
+      this.currentAmmo = Infinity;
+    }
+
     this.primaryCooldown = weaponStats.primaryCooldown;
     this.secondaryCooldown = weaponStats.secondaryCooldown;
   }
 
   public abstract onPrimary(shooter: Player): void;
   public abstract onSecondary(shooter: Player): void;
+  
+  // Optional frame-by-frame state management for held attacks/shields
+  public updateState(keys: any, shooter: Player): void {}
 
   public primaryAttack(shooter: Player) {
     if (
@@ -146,8 +168,9 @@ export abstract class Weapon {
   protected applyHorizontalRecoil(shooter: Player, force: number) {
     if (!shooter.sprite || !shooter.sprite.body) return;
     const knockbackDirection = shooter.facingDirection === 'RIGHT' ? -1 : 1;
-    shooter.sprite.setVelocityX(
-      shooter.sprite.body.velocity.x + force * knockbackDirection
-    );
+    
+    // Apply raw impulse. The new deterministic custom movement controller in Player.ts 
+    // perfectly handles decay, drag, and speed caps without truncating impulses!
+    shooter.sprite.body.velocity.x += force * knockbackDirection;
   }
 }

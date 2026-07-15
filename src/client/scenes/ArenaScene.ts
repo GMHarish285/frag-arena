@@ -13,19 +13,7 @@ import { RocketLauncher } from '../entities/weapons/RocketLauncher';
 import { Uzi } from '../entities/weapons/Uzi';
 import { IMapData } from '../config/MapConfig';
 import { ARENA_REGISTRY, IArenaConfig } from '../config/ArenaConfig';
-
-// Define ammo/durability rules for crates (Index 0 is Pistol, handled as infinite)
-const AMMO_CONFIG: Record<number, number> = {
-  1: 30, // SMG (bullets)
-  2: 5, // Knife (throws)
-  3: 3, // Bomb (bombs)
-  4: 5, // Sniper (bullets)
-  5: 100, // Umbrella (health capacity)
-  6: 8, // Shotgun (blasts)
-  7: 50, // MachineGun (bullets)
-  8: 4, // Rocket Launcher (rockets)
-  9: 40, // Uzi (bullets)
-};
+import { GameConfig } from '../config/ConfigManager';
 
 export class ArenaScene extends Phaser.Scene implements IArena {
   private player1!: Player;
@@ -40,6 +28,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   private solidBombs!: Phaser.Physics.Arcade.Group;
   private meleeSlashes!: Phaser.Physics.Arcade.Group;
 
+  private uiCamera!: Phaser.Cameras.Scene2D.Camera;
   private keys!: any;
   private scoreText!: Phaser.GameObjects.Text;
 
@@ -69,6 +58,10 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   }
 
   create() {
+    // Setup cameras
+    this.cameras.main.setBounds(0, 0, 1920, 1080);
+    this.uiCamera = this.cameras.add(0, 0, 1920, 1080);
+
     this.platforms = this.physics.add.staticGroup();
     this.crates = this.physics.add.staticGroup();
     this.playersGroup = this.physics.add.group();
@@ -118,6 +111,14 @@ export class ArenaScene extends Phaser.Scene implements IArena {
 
     this.playersGroup.add(this.player1.sprite);
     this.playersGroup.add(this.dummy.sprite);
+
+    // Ignore players in UI camera
+    this.uiCamera.ignore([
+      this.player1.sprite, 
+      this.dummy.sprite, 
+      this.player1.skeletonGraphics, 
+      this.dummy.skeletonGraphics
+    ]);
 
     // Colliders & Overlaps
     this.physics.add.collider(
@@ -170,6 +171,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       color: '#818384',
       fontFamily: 'sans-serif',
     });
+    this.cameras.main.ignore(this.scoreText);
 
     this.weapons = [
       new Pistol(this),
@@ -202,8 +204,9 @@ export class ArenaScene extends Phaser.Scene implements IArena {
         padding: { x: 10, y: 5 },
       })
       .setInteractive({ useHandCursor: true })
-      .setScrollFactor(0) // Keeps the button glued to the camera so it doesn't move away
       .setDepth(100); // Keeps it rendered above the stickman
+
+    this.cameras.main.ignore(quitBtn);
 
     quitBtn.on('pointerup', () => {
       // Tells the Scene Manager to shut down the arena and boot the menu
@@ -233,14 +236,14 @@ export class ArenaScene extends Phaser.Scene implements IArena {
 
     const createBtn = (x: number, y: number, text: string, keyNames: string[], radius: number = 60) => {
       const circle = this.add.circle(x, y, radius, 0x333333, 0.6)
-        .setScrollFactor(0)
         .setDepth(1000)
         .setInteractive();
 
-      this.add.text(x, y, text, { fontSize: '32px', color: '#ffffff', fontStyle: 'bold' })
+      const txt = this.add.text(x, y, text, { fontSize: '32px', color: '#ffffff', fontStyle: 'bold' })
         .setOrigin(0.5)
-        .setScrollFactor(0)
         .setDepth(1001);
+
+      this.cameras.main.ignore([circle, txt]);
 
       let isPressed = false;
 
@@ -323,6 +326,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
         bg.setDepth(layer.depth);
       }
       this.bgLayers.push(bg);
+      this.uiCamera.ignore(bg);
     });
 
     this.arenaConfig.map.platforms.forEach((plat) => {
@@ -373,7 +377,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     const spawnX = Phaser.Math.Between(minX, maxX);
     const spawnY = plat.y - plat.height / 2 - 16; // Rest perfectly on top
 
-    this.crates.create(spawnX, spawnY, 'crate_tex');
+    const crate = this.crates.create(spawnX, spawnY, 'crate_tex');
+    this.uiCamera.ignore(crate);
   }
 
   private handleCratePickup(pSprite: any, crateSprite: any) {
@@ -390,7 +395,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   }
 
   private giveWeaponToPlayer(player: Player, index: number) {
-    const ammo = index === 0 ? -1 : (AMMO_CONFIG[index] as number);
+    const weaponConfig = GameConfig.weapons[index];
+    const ammo = index === 0 ? -1 : (weaponConfig ? weaponConfig.maxAmmo : 5);
 
     if (player.id === this.player1.id) {
       this.p1WeaponIndex = index;
@@ -399,7 +405,14 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       this.dummyWeaponIndex = index;
       this.dummyAmmo = ammo;
     }
-    this.weapons[index]?.updateUI(); // Optional hook for UI updates
+    
+    // Refill the internal weapon ammo when equipping
+    const weapon = this.weapons[index];
+    if (weapon) {
+      weapon.currentAmmo = weapon.maxAmmo;
+      weapon.isReloading = false;
+      weapon.updateUI();
+    }
   }
 
   private consumeAmmo(shooter: Player, amount: number) {
@@ -422,6 +435,32 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     if (player.id === shooterId || player.teamId === hazard.getData('teamId'))
       return;
 
+    // Ensure persistent hazards (like melee slashes) only hit a given player once
+    const hitList: string[] = hazard.getData('hitList') || [];
+    if (hitList.includes(player.id)) return;
+    hitList.push(player.id);
+    hazard.setData('hitList', hitList);
+
+    let finalDamage = damage;
+    let finalKbX = hazard.getData('kbX');
+    let finalKbY = hazard.getData('kbY');
+
+    // Distance-based falloff for Shotgun AOE blasts
+    if (hazard.getData('isShotgun')) {
+      const originX = hazard.getData('originX');
+      const range = hazard.getData('range');
+      const dist = Math.abs(player.sprite.x - originX);
+      
+      let multiplier = 1 - (dist / range);
+      if (multiplier < 0) multiplier = 0;
+      
+      finalDamage = Math.ceil(damage * multiplier);
+      finalKbX = finalKbX * multiplier;
+      finalKbY = finalKbY * multiplier;
+      
+      if (finalDamage <= 0) return;
+    }
+
     // Umbrella Block Interception
     if (player.isBlocking && !hazard.getData('isExplosive')) {
       const attackFromRight = hazard.x > player.sprite.x;
@@ -443,8 +482,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       }
     }
 
-    player.takeDamage(damage);
-    player.applyKnockback(hazard.getData('kbX'), hazard.getData('kbY'));
+    player.takeDamage(finalDamage);
+    player.applyKnockback(finalKbX, finalKbY);
 
     if (destroyHazard) {
       if (hazard.getData('isExplosive')) this.detonateExplosive(hazard);
@@ -494,6 +533,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     proj.setData('damage', damage);
     proj.setData('isExplosive', false);
 
+    this.uiCamera.ignore(proj);
+
     // Consume Ammo (Works perfectly for guns & Knife Throws)
     this.consumeAmmo(shooter, 1);
   }
@@ -524,6 +565,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     r.setData('isExplosive', true);
     r.setData('homingStrength', homingStrength);
 
+    this.uiCamera.ignore(r);
+
     this.consumeAmmo(shooter, 1);
     this.time.delayedCall(2500, () => this.detonateExplosive(r));
   }
@@ -537,7 +580,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     shooter: Player,
     kbX: number,
     kbY: number,
-    damage: number
+    damage: number,
+    detonateDelay: number = 2000
   ) {
     const bomb = this.solidBombs.create(
       x,
@@ -556,8 +600,10 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     bomb.setData('isExplosive', true);
     bomb.setData('isGhostBomb', !isSolid);
 
+    this.uiCamera.ignore(bomb);
+
     this.consumeAmmo(shooter, 1);
-    this.time.delayedCall(2000, () => {
+    this.time.delayedCall(detonateDelay, () => {
       if (bomb.active) this.detonateExplosive(bomb);
     });
   }
@@ -586,6 +632,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     slash.setData('damage', damage);
     slash.setData('isExplosive', false);
 
+    this.uiCamera.ignore(slash);
+
     // Notice we DO NOT consume ammo here! This keeps Knife Primary and Umbrella Primary strictly infinite!
     this.tweens.add({
       targets: slash,
@@ -595,11 +643,103 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     });
   }
 
+  spawnShotgunBlast(
+    x: number,
+    y: number,
+    facing: 'LEFT' | 'RIGHT',
+    shooter: Player,
+    kbX: number,
+    kbY: number,
+    damage: number,
+    range: number,
+    spread: number
+  ) {
+    const offset = facing === 'RIGHT' ? range / 2 : -range / 2;
+    const blast = this.meleeSlashes.create(
+      x + offset,
+      y,
+      'slash_tex'
+    ) as Phaser.Physics.Arcade.Sprite;
+    (blast.body as any).allowGravity = false;
+    blast.setDisplaySize(range, spread); // Scale the texture to visually represent the AOE
+    blast.setAlpha(0.6);
+    blast.setData('shooterId', shooter.id);
+    blast.setData('teamId', shooter.teamId);
+    blast.setData('kbX', facing === 'RIGHT' ? kbX : -kbX);
+    blast.setData('kbY', kbY);
+    blast.setData('damage', damage);
+    blast.setData('isExplosive', false);
+    blast.setData('isShotgun', true);
+    blast.setData('originX', x);
+    blast.setData('range', range);
+
+    this.uiCamera.ignore(blast);
+
+    this.tweens.add({
+      targets: blast,
+      alpha: 0,
+      duration: 150,
+      onComplete: () => blast.destroy(),
+    });
+  }
+
   // --- GAME LOOP ---
 
-  override update(time: number) {
-    this.player1.update(this.keys);
-    this.dummy.update();
+  override update(time: number, delta: number) {
+    this.player1.update(this.keys, delta);
+    this.dummy.update(undefined, delta);
+
+    // --- DYNAMIC CAMERA (ZOOM + PAN) ---
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+    let activePlayers = 0;
+
+    this.playersGroup.getChildren().forEach((p) => {
+      const sprite = p as Phaser.Physics.Arcade.Sprite;
+      if (sprite.active && sprite.y < this.arenaConfig.map.deathY) {
+        minX = Math.min(minX, sprite.x);
+        maxX = Math.max(maxX, sprite.x);
+        minY = Math.min(minY, sprite.y);
+        maxY = Math.max(maxY, sprite.y);
+        activePlayers++;
+      }
+    });
+
+    if (activePlayers > 0) {
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+
+      // Calculate desired zoom based on bounding box
+      const paddingX = 600;
+      const paddingY = 400;
+      const boxWidth = (maxX - minX) + paddingX;
+      const boxHeight = (maxY - minY) + paddingY;
+
+      const zoomX = 1920 / boxWidth;
+      const zoomY = 1080 / boxHeight;
+      let targetZoom = Math.min(zoomX, zoomY);
+      
+      const camConfig = this.arenaConfig.cameraConfig;
+      
+      // Clamp zoom between 1.0 (whole arena) and maxZoom
+      targetZoom = Phaser.Math.Clamp(targetZoom, 1.0, camConfig.maxZoom);
+
+      const cam = this.cameras.main;
+      cam.zoom = Phaser.Math.Linear(cam.zoom, targetZoom, camConfig.zoomInterpolation);
+
+      // Target scrollX/scrollY (Phaser calculates view around center)
+      const targetScrollX = centerX - (1920 / 2);
+      const targetScrollY = centerY - (1080 / 2);
+
+      cam.scrollX = Phaser.Math.Linear(cam.scrollX, targetScrollX, camConfig.panInterpolation);
+      cam.scrollY = Phaser.Math.Linear(cam.scrollY, targetScrollY, camConfig.panInterpolation);
+    }
+    // -----------------------------------
+
+    // Fix for debug graphics showing up twice (once on each camera)
+    if (this.physics.world.debugGraphic) {
+      this.uiCamera.ignore(this.physics.world.debugGraphic);
+    }
 
     if (this.player1.sprite.y > this.arenaConfig.map.deathY)
       this.handleOutOfBoundsRespawn(
@@ -614,11 +754,21 @@ export class ArenaScene extends Phaser.Scene implements IArena {
 
     const p1WepName = this.weapons[this.p1WeaponIndex]?.name ?? 'Unknown';
     const dummyWepName = this.weapons[this.dummyWeaponIndex]?.name ?? 'Unknown';
-    const formatAmmo = (ammo: number) => (ammo === -1 ? '∞' : ammo);
+    const p1Wep = this.weapons[this.p1WeaponIndex];
+    const dummyWep = this.weapons[this.dummyWeaponIndex];
+
+    const getAmmoText = (wep: Weapon | undefined, globalAmmo: number) => {
+      if (!wep) return '0';
+      if (wep.id === 0) {
+        if (wep.isReloading) return 'RELOADING...';
+        return `${wep.currentAmmo} / ∞`;
+      }
+      return `${globalAmmo}`;
+    };
 
     this.scoreText.setText(
-      `P1 [${p1WepName}]: HP ${this.player1.health} | Stocks: ${this.player1.lives} | Ammo: ${formatAmmo(this.p1Ammo)}\n` +
-        `DUMMY [${dummyWepName}]: HP ${this.dummy.health} | Stocks: ${this.dummy.lives} | Ammo: ${formatAmmo(this.dummyAmmo)}`
+      `P1 [${p1WepName}]: HP ${this.player1.health} | Stocks: ${this.player1.lives} | Ammo: ${getAmmoText(p1Wep, this.p1Ammo)}\n` +
+        `DUMMY [${dummyWepName}]: HP ${this.dummy.health} | Stocks: ${this.dummy.lives} | Ammo: ${getAmmoText(dummyWep, this.dummyAmmo)}`
     );
 
     // Dev cheats for weapon switching
@@ -644,10 +794,11 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       this.giveWeaponToPlayer(this.player1, 9);
 
     // Route inputs to the Player 1's currently active weapon state
-    const p1Wep = this.weapons[this.p1WeaponIndex];
-    if (p1Wep) {
-      if (this.keys.T.isDown) p1Wep.primaryAttack(this.player1);
-      if (this.keys.Y.isDown) p1Wep.secondaryAttack(this.player1);
+    const activeWep = this.weapons[this.p1WeaponIndex];
+    if (activeWep) {
+      if (this.keys.T.isDown) activeWep.primaryAttack(this.player1);
+      if (this.keys.Y.isDown) activeWep.secondaryAttack(this.player1);
+      activeWep.updateState(this.keys, this.player1);
     }
 
     this.rockets.getChildren().forEach((r) => {
@@ -735,5 +886,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     plat.body.checkCollision.down = false;
     plat.body.checkCollision.left = false;
     plat.body.checkCollision.right = false;
+    
+    this.uiCamera.ignore(plat);
   }
 }

@@ -32,7 +32,7 @@ export class Knife extends Weapon {
             playerSprite.x, 
             playerSprite.y, 
             dirX, 
-            0, 
+            stats.speedY ?? -300, 
             'knife_tex', 
             true, 
             shooter, 

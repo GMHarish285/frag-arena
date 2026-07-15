@@ -9,7 +9,7 @@ export class Player {
   public sprite: Phaser.Types.Physics.Arcade.SpriteWithDynamicBody;
 
   // --- STEP 2: ADD SKELETON BONE CONFIGURATIONS (THE RIG) ---
-  private skeletonGraphics!: Phaser.GameObjects.Graphics;
+  public skeletonGraphics!: Phaser.GameObjects.Graphics;
 
   private readonly spineLength: number = 35;
   private readonly headRadius: number = 12;
@@ -39,8 +39,7 @@ export class Player {
   public lives: number;
   private maxHealth: number;
 
-  // Enforced specific sprite caps not present in standard physics config
-  private readonly maxMoveSpeed: number = 50;
+  public isKnockedBack: boolean = false;
 
   constructor(
     scene: Phaser.Scene,
@@ -79,8 +78,7 @@ export class Player {
     // USE CONFIG: World Gravity
     this.sprite.setGravityY(GameConfig.world.physics.gravityY);
 
-    // Enforce maximum absolute movement limits so acceleration doesn't scale infinitely
-    this.sprite.setMaxVelocity(this.maxMoveSpeed, 1200);
+    // Max velocity is now enforced dynamically in the update loop via Config
 
     // Hides the block image but leaves debug hitbox visible
     this.sprite.setAlpha(0);
@@ -297,6 +295,10 @@ export class Player {
       kbX *= 0.2;
       kbY *= 0.2;
     }
+    
+    this.isKnockedBack = true;
+    this.sprite.setMaxVelocity(10000, 1200); // Temporarily uncap velocity
+    
     // Temporarily reset acceleration on hit so your inputs don't instantly fight the knockback vector
     this.sprite.setAccelerationX(0);
     this.sprite.setVelocity(
@@ -310,7 +312,7 @@ export class Player {
     this.sprite.setAlpha(this.isInvisible ? 0.15 : 1);
   }
 
-  public update(keys?: any) {
+  public update(keys?: any, delta: number = 16.66) {
     // --- READ FROM CENTRAL CONFIG ---
     const {
       accelerationRate,
@@ -319,8 +321,14 @@ export class Player {
       jumpVelocity,
       maxJumps,
       coyoteTimeMs,
-    } = GameConfig.player.movement;
+      maxSpeed,
+    } = (GameConfig.player as any).movement;
     const { boundaries } = GameConfig.world;
+
+    // Check if knockback has ended (stun duration ends when naturally decelerated)
+    if (this.isKnockedBack && Math.abs(this.sprite.body.velocity.x) <= (maxSpeed ?? 600)) {
+      this.isKnockedBack = false;
+    }
 
     // Get the current game time for our timer checks
     const currentTime = this.sprite.scene.time.now;
@@ -335,14 +343,12 @@ export class Player {
     }
     this.wasGrounded = isGrounded;
 
-    // --- COYOTE TIME & DRAG LOGIC ---
+    let currentDrag = airDrag;
     if (isGrounded) {
       this.jumpCount = 0;
       this.lastGroundedTime = currentTime;
-      this.sprite.setDragX(groundDrag);
+      currentDrag = groundDrag;
     } else {
-      this.sprite.setDragX(airDrag);
-
       // If we are airborne and haven't jumped yet, check the coyote grace period.
       // If the time since we left the ground exceeds the config window, consume the first jump.
       if (
@@ -353,31 +359,60 @@ export class Player {
       }
     }
 
-    // --- MOVEMENT INPUTS ---
-    if (keys) {
+    // --- MOVEMENT INPUTS (CUSTOM DETERMINISTIC CONTROLLER) ---
+    const dt = delta / 1000;
+    const currentVelocityX = this.sprite.body.velocity.x;
+    let targetVelocityX = 0;
+
+    if (keys && !this.isKnockedBack) {
       if (keys.A.isDown) {
-        this.sprite.setAccelerationX(-accelerationRate);
+        targetVelocityX = -maxSpeed;
         this.facingDirection = 'LEFT';
       } else if (keys.D.isDown) {
-        this.sprite.setAccelerationX(accelerationRate);
+        targetVelocityX = maxSpeed;
         this.facingDirection = 'RIGHT';
-      } else {
-        // Instantly halt active force addition if no navigation buttons are held down
-        this.sprite.setAccelerationX(0);
       }
-
+      
       // --- JUMPING ---
       if (Phaser.Input.Keyboard.JustDown(keys.W) && this.jumpCount < maxJumps) {
         this.sprite.setVelocityY(jumpVelocity);
         this.jumpCount++;
-
-        // Instantly zero out the grounded timer so the jump cancels the coyote window
         this.lastGroundedTime = 0;
       }
-    } else {
-      // For autonomous entities (Dummy), zero active internal thrust addition
-      this.sprite.setAccelerationX(0);
     }
+
+    if (this.isKnockedBack) {
+      targetVelocityX = 0; // Stunned, natural drag takes over completely
+    }
+
+    // Determine acceleration rate based on intent and current speed
+    let accelRate = 0;
+    
+    // If we are moving faster than maxSpeed in the direction we want to go (e.g. from recoil boost)
+    if (Math.abs(currentVelocityX) > maxSpeed && targetVelocityX !== 0 && Math.sign(currentVelocityX) === Math.sign(targetVelocityX)) {
+      accelRate = currentDrag; // Use drag to decay down to maxSpeed
+      targetVelocityX = Math.sign(currentVelocityX) * maxSpeed;
+    } 
+    // If we are stopping, turning around, or exceeding max speed in wrong direction
+    else if (targetVelocityX === 0 || Math.sign(targetVelocityX) !== Math.sign(currentVelocityX)) {
+      accelRate = currentDrag; 
+    } 
+    // Normal forward acceleration
+    else {
+      accelRate = accelerationRate;
+    }
+
+    // Apply exact velocity step
+    if (currentVelocityX < targetVelocityX) {
+      this.sprite.body.velocity.x = Math.min(currentVelocityX + accelRate * dt, targetVelocityX);
+    } else if (currentVelocityX > targetVelocityX) {
+      this.sprite.body.velocity.x = Math.max(currentVelocityX - accelRate * dt, targetVelocityX);
+    }
+
+    // Disable Phaser's internal automation to prevent conflicts
+    this.sprite.setAccelerationX(0);
+    this.sprite.setDragX(0);
+    this.sprite.setMaxVelocity(10000, 1200); // Completely uncap so impulses aren't truncated
 
     // --- BOUNDARY ENFORCEMENT VIA CONFIG ---
     if (

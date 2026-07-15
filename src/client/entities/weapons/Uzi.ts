@@ -14,12 +14,15 @@ export class Uzi extends Weapon {
         const playerSprite = shooter.sprite;
         const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 1200) : -(stats.speed ?? 1200);
 
+        const spreadRange = stats.spread ?? 150;
+        const randomVy = Phaser.Math.Between(-spreadRange, spreadRange);
+
         // Straight-shot spray mechanics driven by config numbers
         this.scene.spawnProjectile(
             playerSprite.x, 
             playerSprite.y + 10, 
             dirX, 
-            0, 
+            randomVy, 
             'bullet_tex', 
             false, 
             shooter, 

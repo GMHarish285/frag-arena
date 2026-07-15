@@ -23,10 +23,15 @@ export class Umbrella extends Weapon {
     }
 
     override onSecondary(shooter: Player) {
-        // Enforce active damage reduction bounds via an engine-timed cycle
-        shooter.isBlocking = true;
-        this.scene.addTimer(1000, () => {
+        // Replaced by frame-by-frame hold logic in updateState
+    }
+
+    override updateState(keys: any, shooter: Player) {
+        // Keep the umbrella open and active as long as the secondary button (Y) is held
+        if (keys && keys.Y && keys.Y.isDown) {
+            shooter.isBlocking = true;
+        } else {
             shooter.isBlocking = false;
-        });
+        }
     }
 }

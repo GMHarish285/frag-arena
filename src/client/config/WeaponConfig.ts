@@ -11,6 +11,8 @@ export interface AttackConfig {
   spread?: number; // Total vertical variation range for multi-pellets
   isSolid?: boolean; // Structural property flag for explosives
   homing?: number; // Homing scaling multiplier coefficients (Rockets)
+  angle?: number; // Throw angle in degrees (0 is straight ahead)
+  detonateDelay?: number; // Time in milliseconds before auto-detonating
 }
 
 export interface WeaponBlueprint {
@@ -31,22 +33,22 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     name: 'PISTOL',
     maxAmmo: 12, // Standard capacity before triggers enforce reload limits
     tier: 'DEFAULT',
-    primaryCooldown: 250,
+    primaryCooldown: 450,
     secondaryCooldown: 1000,
-    primary: { damage: 15, speed: 1200, recoil: 150, kbX: 400, kbY: -100 },
-    secondary: { damage: 30, speed: 800, recoil: 0, kbX: 600, kbY: -200 }, // Thrown weapon payload frame
+    primary: { damage: 10, speed: 1200, recoil: 250, kbX: 1200, kbY: 0 },
+    secondary: { damage: 10, speed: 2200, speedY: -400, recoil: 0, kbX: 1000, kbY: -300 }, // Thrown weapon payload frame
   },
 
   // 1: SMG (Submachine Gun Crate Drop)
   1: {
     id: 1,
     name: 'SMG',
-    maxAmmo: 30,
+    maxAmmo: 20,
     tier: 'CRATE',
-    primaryCooldown: 80,
+    primaryCooldown: 150,
     secondaryCooldown: 500,
-    primary: { damage: 8, speed: 1400, recoil: 90, kbX: 90, kbY: -40 },
-    secondary: { damage: 12, speed: 1800, recoil: 150, kbX: 140, kbY: -80 }, // Heavy tracer burst logic
+    primary: { damage: 5, speed: 1800, recoil: 80, kbX: 800, kbY: 0, spread: 170 },
+    secondary: { damage: 5, speed: 1800, recoil: 50, kbX: 800, kbY: 0, spread: 100 }, // Heavy tracer burst logic
   },
 
   // 2: TACTICAL KNIFE (Melee / Bladed Fallback Drop Variant)
@@ -56,9 +58,9 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     maxAmmo: Infinity, // Melee weapon frame that never depletes or locks down
     tier: 'DEFAULT',
     primaryCooldown: 400,
-    secondaryCooldown: 800,
-    primary: { damage: 25, kbX: 300, kbY: -200 }, // Melee sweep slice coordinates
-    secondary: { damage: 35, speed: 1000, kbX: 400, kbY: -150 }, // Thrown dagger velocity profiles
+    secondaryCooldown: 500,
+    primary: { damage: 20, kbX: 1200, kbY: 0 }, // Melee sweep slice coordinates
+    secondary: { damage: 15, speed: 3000, speedY: -350, kbX: 1500, kbY: 0 }, // Thrown dagger velocity profiles
   },
 
   // 3: EXPLOSIVE BOMB (Grenade/Mine Weapon Node)
@@ -70,20 +72,22 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     primaryCooldown: 800,
     secondaryCooldown: 800,
     primary: {
-      damage: 40,
-      speed: 400,
-      speedY: -500,
+      damage: 30,
+      speed: 900,
+      angle: -25,
       kbX: 800,
       kbY: -700,
       isSolid: true,
+      detonateDelay: 2000,
     }, // High-explosive bouncing mine
     secondary: {
       damage: 30,
-      speed: 200,
-      speedY: 100,
+      speed: 1200,
+      angle: -25,
       kbX: 600,
       kbY: -500,
       isSolid: false,
+      detonateDelay: 1000,
     }, // Proximity capsule bypass module
   },
 
@@ -95,7 +99,7 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     tier: 'CRATE',
     primaryCooldown: 1200,
     secondaryCooldown: 500,
-    primary: { damage: 55, speed: 2500, recoil: 300, kbX: 800, kbY: -200 }, // Armor piercing heavy bullet trace
+    primary: { damage: 40, speed: 3500, recoil: 1200, kbX: 2400, kbY: 0 }, // Armor piercing heavy bullet trace
     secondary: { damage: 0 }, // Cloaking tracking loop hook (handled procedurally by player visibility)
   },
 
@@ -120,22 +124,22 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     primaryCooldown: 800,
     secondaryCooldown: 1200,
     primary: {
-      damage: 12,
-      speed: 1000,
-      recoil: 250,
-      kbX: 200,
-      kbY: -50,
-      pellets: 3,
-      spread: 150,
+      damage: 15,
+      speed: 100, // Effective Range
+      recoil: 800,
+      kbX: 1800,
+      kbY: -300,
+      pellets: 3, // Total Damage = 75 point-blank
+      spread: 150, // Vertical AOE Height
     },
     secondary: {
       damage: 15,
-      speed: 1200,
-      recoil: 400,
-      kbX: 300,
-      kbY: -100,
-      pellets: 5,
-      spread: 300,
+      speed: 100, // Shorter range
+      recoil: 1200,
+      kbX: 3000,
+      kbY: -400,
+      pellets: 5, // Total Damage = 120 point-blank
+      spread: 150, // Massive vertical spread
     },
   },
 
@@ -145,10 +149,10 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     name: 'MACHINE GUN',
     maxAmmo: 50,
     tier: 'CRATE',
-    primaryCooldown: 1000, // Safe threshold interval for tracking core loop cycles
-    secondaryCooldown: 600,
-    primary: { damage: 14, speed: 1600, recoil: 60, kbX: 120, kbY: -50 }, // Rapid automatic fire cycles
-    secondary: { damage: 28, kbX: 400, kbY: -100 }, // Heavy rifle stock butt-strike physical push
+    primaryCooldown: 200, // Safe threshold interval for tracking core loop cycles
+    secondaryCooldown: 300,
+    primary: { damage: 7, speed: 1600, recoil: 120, kbX: 900, kbY: 0, spread: 50 }, // Rapid automatic fire cycles
+    secondary: { damage: 18, kbX: 800, kbY: -100 }, // Heavy rifle stock butt-strike physical push
   },
 
   // 8: TACTICAL ROCKET LAUNCHER (Heavy Ballistic Blast Cannon)
@@ -162,7 +166,7 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     primary: {
       damage: 45,
       speed: 800,
-      recoil: 300,
+      recoil: 900,
       kbX: 900,
       kbY: -600,
       homing: 0,
@@ -171,10 +175,10 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
       damage: 35,
       speed: 600,
       speedY: -200,
-      recoil: 300,
+      recoil: 900,
       kbX: 800,
       kbY: -500,
-      homing: 0.05,
+      homing: 0.015,
     }, // Core guided tracking missile logic
   },
 
@@ -184,15 +188,15 @@ export const BaseWeaponConfig: Record<number, WeaponBlueprint> = {
     name: 'UZI',
     maxAmmo: 40,
     tier: 'CRATE',
-    primaryCooldown: 60,
-    secondaryCooldown: 60,
-    primary: { damage: 7, speed: 1200, recoil: 40, kbX: 80, kbY: -20 }, // Linear straight vector spray stream
+    primaryCooldown: 100,
+    secondaryCooldown: 100,
+    primary: { damage: 4, speed: 1200, recoil: 60, kbX: 300, kbY: 0, spread: 100 }, // Linear straight vector spray stream
     secondary: {
       damage: 9,
       speed: 1000,
-      recoil: 40,
-      kbX: 100,
-      kbY: -40,
+      recoil: 180,
+      kbX: 300,
+      kbY: 0,
       spread: 300,
     }, // Cone-based angular variance calculation
   },

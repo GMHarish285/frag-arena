@@ -8,32 +8,24 @@ export class Shotgun extends Weapon {
 
     override onPrimary(shooter: Player) {
         if (this.currentAmmo < 1) return;
-        const dir = shooter.facingDirection === 'RIGHT' ? 1 : -1;
         const stats = this.config.primary;
-
+        
         const pellets = stats.pellets ?? 3;
-        const spreadRange = stats.spread ?? 150;
-        const speed = stats.speed ?? 1000;
+        const range = stats.speed ?? 500; // Shotgun range is much shorter now
+        const spread = stats.spread ?? 200; // Vertical height of the AOE blast
+        const totalDamage = (stats.damage ?? 12) * pellets;
 
-        // Automatically space out pellets symmetrically over your chosen spread limit
-        for (let i = 0; i < pellets; i++) {
-            let vy = 0;
-            if (pellets > 1) {
-                vy = -spreadRange + (spreadRange * 2 / (pellets - 1)) * i;
-            }
-            this.scene.spawnProjectile(
-                shooter.sprite.x, 
-                shooter.sprite.y, 
-                speed * dir, 
-                vy, 
-                'bullet_tex', 
-                false, 
-                shooter, 
-                stats.kbX ?? 200, 
-                stats.kbY ?? -50, 
-                stats.damage
-            );
-        }
+        this.scene.spawnShotgunBlast(
+            shooter.sprite.x, 
+            shooter.sprite.y, 
+            shooter.facingDirection, 
+            shooter, 
+            stats.kbX ?? 800, 
+            stats.kbY ?? -200, 
+            totalDamage,
+            range,
+            spread
+        );
 
         this.applyHorizontalRecoil(shooter, stats.recoil ?? 250); 
         this.consumeAmmo(1);
@@ -41,32 +33,24 @@ export class Shotgun extends Weapon {
 
     override onSecondary(shooter: Player) {
         if (this.currentAmmo < 2) return;
-        const dir = shooter.facingDirection === 'RIGHT' ? 1 : -1;
         const stats = this.config.secondary;
 
         const pellets = stats.pellets ?? 5;
-        const spreadRange = stats.spread ?? 300;
-        const speed = stats.speed ?? 1200;
+        const range = stats.speed ?? 400; // Secondary is shorter but wider
+        const spread = stats.spread ?? 400;
+        const totalDamage = (stats.damage ?? 15) * pellets;
 
-        // Symmetrical spacing for heavy secondary burst configuration
-        for (let i = 0; i < pellets; i++) {
-            let vy = 0;
-            if (pellets > 1) {
-                vy = -spreadRange + (spreadRange * 2 / (pellets - 1)) * i;
-            }
-            this.scene.spawnProjectile(
-                shooter.sprite.x, 
-                shooter.sprite.y, 
-                speed * dir, 
-                vy, 
-                'bullet_tex', 
-                false, 
-                shooter, 
-                stats.kbX ?? 300, 
-                stats.kbY ?? -100, 
-                stats.damage
-            );
-        }
+        this.scene.spawnShotgunBlast(
+            shooter.sprite.x, 
+            shooter.sprite.y, 
+            shooter.facingDirection, 
+            shooter, 
+            stats.kbX ?? 1500, 
+            stats.kbY ?? -300, 
+            totalDamage,
+            range,
+            spread
+        );
 
         this.applyHorizontalRecoil(shooter, stats.recoil ?? 400); 
         this.consumeAmmo(2);

@@ -1,3 +1,4 @@
+import Phaser from 'phaser';
 import { Weapon, IArena } from './Weapon';
 import { Player } from '../Player';
 
@@ -13,12 +14,15 @@ export class SMG extends Weapon {
         const playerSprite = shooter.sprite;
         const dirX = shooter.facingDirection === 'RIGHT' ? (stats.speed ?? 1400) : -(stats.speed ?? 1400);
         
+        const spread = stats.spread ?? 0;
+        const dirY = spread > 0 ? Phaser.Math.Between(-spread / 2, spread / 2) : 0;
+        
         // Fast, light bullets driven by configuration
         this.scene.spawnProjectile(
             playerSprite.x, 
             playerSprite.y + 10, 
             dirX, 
-            0, 
+            dirY, 
             'bullet_tex', 
             false, 
             shooter, 
@@ -31,7 +35,7 @@ export class SMG extends Weapon {
     }
 
     override onSecondary(shooter: Player) {
-        if (this.currentAmmo < 3) return; 
+        if (this.currentAmmo <= 0) return; 
         
         const stats = this.config.secondary;
         const speed = stats.speed ?? 1800;
@@ -40,17 +44,19 @@ export class SMG extends Weapon {
         const kbY = stats.kbY ?? -80;
         const recoil = stats.recoil ?? 150;
 
-        // Fire a rhythmic burst pattern using the framework timer hook
-        this.scene.addTimer(80, () => {
+        const spread = stats.spread ?? 0;
+
+        const fireBurstShot = () => {
             if (this.currentAmmo > 0 && !this.isReloading) {
                 const playerSprite = shooter.sprite;
                 const dirX = shooter.facingDirection === 'RIGHT' ? speed : -speed;
+                const dirY = spread > 0 ? Phaser.Math.Between(-spread / 2, spread / 2) : 0;
                 
                 this.scene.spawnProjectile(
                     playerSprite.x, 
                     playerSprite.y + 10, 
                     dirX, 
-                    0, 
+                    dirY, 
                     'bullet_tex', 
                     false, 
                     shooter, 
@@ -61,6 +67,12 @@ export class SMG extends Weapon {
                 this.applyHorizontalRecoil(shooter, recoil);
                 this.consumeAmmo(1);
             }
-        }, 3); // Executes exactly three burst passes
+        };
+
+        // Fire first shot instantly
+        fireBurstShot();
+
+        // Fire remaining 2 shots in burst
+        this.scene.addTimer(80, fireBurstShot, 1);
     }
 }

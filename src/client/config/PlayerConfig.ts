@@ -1,11 +1,12 @@
 export const BasePlayerConfig = {
   movement: {
-    accelerationRate: 1800,
-    groundDrag: 4400,
-    airDrag: 2000,
+    accelerationRate: 900,
+    groundDrag: 3000,
+    airDrag: 3000,
     jumpVelocity: -850,
     maxJumps: 2,
-    coyoteTimeMs: 200,
+    coyoteTimeMs: 150,
+    maxSpeed: 600,
   },
   stats: {
     maxHealth: 100,
