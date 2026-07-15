@@ -14,10 +14,12 @@ import { Uzi } from '../entities/weapons/Uzi';
 import { IMapData } from '../config/MapConfig';
 import { ARENA_REGISTRY, IArenaConfig } from '../config/ArenaConfig';
 import { GameConfig } from '../config/ConfigManager';
+import { AIController } from '../entities/AIController';
 
 export class ArenaScene extends Phaser.Scene implements IArena {
   private player1!: Player;
   public dummy!: Player;
+  private aiController!: AIController;
   private playersGroup!: Phaser.Physics.Arcade.Group;
 
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
@@ -32,8 +34,9 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   private keys!: any;
   private scoreText!: Phaser.GameObjects.Text;
 
-  // Single instances of weapons to route logic
-  private weapons: Weapon[] = [];
+  // Weapon instances per player to avoid cooldown/state conflicts
+  private p1Weapons: Weapon[] = [];
+  private dummyWeapons: Weapon[] = [];
 
   // Independent Player States
   private p1WeaponIndex: number = 0;
@@ -115,6 +118,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.player1.equipWeapon(0);
     this.dummy.equipWeapon(0);
 
+    this.aiController = new AIController(this, this.dummy, this.player1, 'HARD');
+
     this.playersGroup.add(this.player1.sprite);
     this.playersGroup.add(this.dummy.sprite);
 
@@ -179,7 +184,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     });
     this.cameras.main.ignore(this.scoreText);
 
-    this.weapons = [
+    const createWeapons = () => [
       new Pistol(this),
       new SMG(this),
       new Knife(this),
@@ -191,6 +196,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       new RocketLauncher(this),
       new Uzi(this),
     ];
+    this.p1Weapons = createWeapons();
+    this.dummyWeapons = createWeapons();
 
     // Equip default weapons based on config
     this.giveWeaponToPlayer(this.player1, this.arenaConfig.defaultWeaponIndex);
@@ -404,18 +411,20 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     const weaponConfig = GameConfig.weapons[index];
     const ammo = index === 0 ? -1 : (weaponConfig ? weaponConfig.maxAmmo : 5);
 
+    let weapon;
     if (player.id === this.player1.id) {
       this.p1WeaponIndex = index;
       this.p1Ammo = ammo;
+      weapon = this.p1Weapons[index];
     } else {
       this.dummyWeaponIndex = index;
       this.dummyAmmo = ammo;
+      weapon = this.dummyWeapons[index];
     }
     
     player.equipWeapon(index);
     
     // Refill the internal weapon ammo when equipping
-    const weapon = this.weapons[index];
     if (weapon) {
       weapon.currentAmmo = weapon.maxAmmo;
       weapon.isReloading = false;
@@ -726,7 +735,11 @@ export class ArenaScene extends Phaser.Scene implements IArena {
 
   override update(time: number, delta: number) {
     this.player1.update(this.keys, delta);
-    this.dummy.update(undefined, delta);
+    if (this.aiController) {
+      this.aiController.update(time, delta);
+    } else {
+      this.dummy.update(undefined, delta);
+    }
 
     // --- DYNAMIC CAMERA (ZOOM + PAN) ---
     let minX = Infinity, maxX = -Infinity;
@@ -791,10 +804,10 @@ export class ArenaScene extends Phaser.Scene implements IArena {
         this.arenaConfig.map.spawnPoints.dummy
       );
 
-    const p1WepName = this.weapons[this.p1WeaponIndex]?.name ?? 'Unknown';
-    const dummyWepName = this.weapons[this.dummyWeaponIndex]?.name ?? 'Unknown';
-    const p1Wep = this.weapons[this.p1WeaponIndex];
-    const dummyWep = this.weapons[this.dummyWeaponIndex];
+    const p1WepName = this.p1Weapons[this.p1WeaponIndex]?.name ?? 'Unknown';
+    const dummyWepName = this.dummyWeapons[this.dummyWeaponIndex]?.name ?? 'Unknown';
+    const p1Wep = this.p1Weapons[this.p1WeaponIndex];
+    const dummyWep = this.dummyWeapons[this.dummyWeaponIndex];
 
     const getAmmoText = (wep: Weapon | undefined, globalAmmo: number) => {
       if (!wep) return '0';
@@ -833,11 +846,20 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       this.giveWeaponToPlayer(this.player1, 9);
 
     // Route inputs to the Player 1's currently active weapon state
-    const activeWep = this.weapons[this.p1WeaponIndex];
+    const activeWep = this.p1Weapons[this.p1WeaponIndex];
     if (activeWep) {
       if (this.keys.T.isDown) activeWep.primaryAttack(this.player1);
       if (this.keys.Y.isDown) activeWep.secondaryAttack(this.player1);
       activeWep.updateState(this.keys, this.player1);
+    }
+
+    // Route inputs to Dummy's currently active weapon state from AI
+    const dummyActiveWep = this.dummyWeapons[this.dummyWeaponIndex];
+    if (dummyActiveWep && this.aiController) {
+      const aiKeys = this.aiController.getKeys();
+      if (aiKeys.T.isDown) dummyActiveWep.primaryAttack(this.dummy);
+      if (aiKeys.Y.isDown) dummyActiveWep.secondaryAttack(this.dummy);
+      dummyActiveWep.updateState(aiKeys, this.dummy);
     }
 
     this.rockets.getChildren().forEach((r) => {
@@ -893,8 +915,16 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     const pBody = playerSprite.body as Phaser.Physics.Arcade.Body;
     const platBody = platform.body as Phaser.Physics.Arcade.StaticBody;
 
-    if (playerSprite === this.player1.sprite && Phaser.Input.Keyboard.JustDown(this.keys.S)) {
-      const player = playerSprite.getData('entity') as Player;
+    let sJustDown = false;
+    const player = playerSprite.getData('entity') as Player;
+    
+    if (player.id === this.player1.id) {
+       sJustDown = Phaser.Input.Keyboard.JustDown(this.keys.S);
+    } else if (player.id === this.dummy.id && this.aiController) {
+       sJustDown = this.aiController.getKeys().S.justDown;
+    }
+
+    if (sJustDown) {
       const timeSinceLanded = this.time.now - player.lastLandedTime;
       // Ensure they have been on the platform (or spawned) for at least 200ms before allowing drop
       if (timeSinceLanded > 200) {

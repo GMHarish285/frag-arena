@@ -651,7 +651,8 @@ export class Player {
       }
       
       // --- JUMPING ---
-      if (Phaser.Input.Keyboard.JustDown(keys.W) && this.jumpCount < maxJumps) {
+      const wJustDown = keys.W.isFake ? keys.W.justDown : Phaser.Input.Keyboard.JustDown(keys.W);
+      if (wJustDown && this.jumpCount < maxJumps) {
         this.sprite.setVelocityY(jumpVelocity);
         this.jumpCount++;
         this.lastGroundedTime = 0;
