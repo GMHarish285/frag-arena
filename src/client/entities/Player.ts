@@ -18,8 +18,8 @@ export class Player {
   private readonly armLen1: number = 22;
   private readonly armLen2 = 22;
 
-  private readonly legLen1: number = 28;
-  private readonly legLen2 = 28;
+  private readonly legLen1: number = 23;
+  private readonly legLen2 = 23;
 
   // --- STEP 4 RUN CYCLE TRACKING ---
   private walkTime: number = 0;
@@ -226,9 +226,28 @@ export class Player {
     const px = this.sprite.x;
     const py = this.sprite.y;
 
+    // Calculate landing crouch offset
+    let crouchOffset = 0;
+    const timeSinceLanded = this.sprite.scene.time.now - this.lastLandedTime;
+    if (timeSinceLanded < 200) {
+      crouchOffset = Math.sin((timeSinceLanded / 200) * Math.PI) * 12;
+    }
+
+    const vx = this.sprite.body.velocity.x;
+
+    // Idle Breathing (Subtle vertical sway when standing still)
+    let breatheOffset = 0;
+    if (Math.abs(vx) < 10) {
+      breatheOffset = Math.sin(this.sprite.scene.time.now * 0.003) * 2;
+    }
+
+    // Torso Leaning (Momentum shift)
+    // When running, the neck leans forward relative to the pelvis
+    const leanOffset = vx * 0.015; 
+
     // 1. Central spine structural coordinates
-    const neck = { x: px, y: py - 32 };
-    const pelvis = { x: px, y: py + 3 };
+    const neck = { x: px + leanOffset, y: py - 32 + crouchOffset + breatheOffset };
+    const pelvis = { x: px, y: py + 3 + crouchOffset };
 
     // Draw Head and Torso Spine
     g.fillCircle(neck.x, neck.y - this.headRadius, this.headRadius);
@@ -332,7 +351,6 @@ export class Player {
 
     // 3. LEGS: Procedural Walk Cycle & Jump Pose Math
     const groundY = py + 47.5;
-    const vx = this.sprite.body.velocity.x;
     const vy = this.sprite.body.velocity.y;
     const isGrounded =
       this.sprite.body.touching.down || this.sprite.body.blocked.down;

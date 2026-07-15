@@ -118,7 +118,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.player1.equipWeapon(0);
     this.dummy.equipWeapon(0);
 
-    this.aiController = new AIController(this, this.dummy, this.player1, 'HARD');
+    // this.aiController = new AIController(this, this.dummy, this.player1, 'HARD');
 
     this.playersGroup.add(this.player1.sprite);
     this.playersGroup.add(this.dummy.sprite);
