@@ -21,7 +21,7 @@ export function launchPhaserGame(parentEl: HTMLDivElement): Phaser.Game {
             default: 'arcade',
             arcade: {
                 gravity: { x: 0, y: 2400 },
-                debug: true 
+                debug: false
             }
         },
         scene: [MainMenuScene, ArenaScene, StoryModeScene, LeaderboardScene, SettingsScene]

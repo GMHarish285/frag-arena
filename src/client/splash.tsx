@@ -71,18 +71,18 @@ const ENGINE_CONFIG = {
     },
     playButton: {
       bottom: '8%',               // Pinned clean right above bottom grid bounds
-      width: '240px',             
-      height: '76px'              
+      width: '320px',             
+      height: '96px'              
     },
     leftStickman: {
-      left: '5%',                 
-      bottom: '38%',              // Placed inline to stand firmly right over the horizon line
+      left: '-2%',                 
+      bottom: '22%',              // Placed inline to stand firmly right over the horizon line
       width: '35%',               
       height: '40%'               
     },
     rightStickman: {
-      right: '5%',                
-      bottom: '38%',              
+      right: '-2%',                
+      bottom: '22%',              
       width: '35%',               
       height: '40%'               
     }
@@ -95,6 +95,110 @@ interface GridFlash {
   speed: number;
   streakLength: number;
 }
+
+// --- SVG STICKMAN & WEAPON COMPONENTS ---
+interface Joint { x: number; y: number; }
+const solveIK = (root: Joint, target: Joint, len1: number, len2: number, flipJoint: boolean): Joint => {
+  const dx = target.x - root.x;
+  const dy = target.y - root.y;
+  let dist = Math.sqrt(dx * dx + dy * dy);
+  const maxReach = len1 + len2 - 0.1;
+  if (dist > maxReach) {
+    const angle = Math.atan2(dy, dx);
+    target.x = root.x + Math.cos(angle) * maxReach;
+    target.y = root.y + Math.sin(angle) * maxReach;
+    dist = maxReach;
+  }
+  const cosAngle = (len1 * len1 + dist * dist - len2 * len2) / (2 * len1 * dist);
+  const innerAngle = Math.acos(Math.max(-1, Math.min(1, cosAngle)));
+  const baseAngle = Math.atan2(dy, dx);
+  const finalAngle = flipJoint ? baseAngle - innerAngle : baseAngle + innerAngle;
+  return {
+    x: root.x + Math.cos(finalAngle) * len1,
+    y: root.y + Math.sin(finalAngle) * len1,
+  };
+};
+
+const WeaponSvg = ({ data, color, scale }: { data: string[], color: string, scale: number }) => {
+  return (
+    <>
+      {data.map((row, y) => 
+        row.split('').map((char, x) => {
+          if (char === ' ') return null;
+          return <rect key={`${x}-${y}`} x={x * scale} y={y * scale} width={scale} height={scale} fill={color} />
+        })
+      )}
+    </>
+  );
+};
+
+const StickmanSvg = ({ color, weaponColor, isRight, weaponData, weaponOffset }: any) => {
+  const [time, setTime] = React.useState(0);
+
+  React.useEffect(() => {
+    let animationFrameId: number;
+    const animate = (timestamp: number) => {
+      setTime(timestamp);
+      animationFrameId = requestAnimationFrame(animate);
+    };
+    animationFrameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, []);
+
+  const scale = 2.2;
+  const headRadius = 12 * scale;
+  const armLen1 = 22 * scale;
+  const armLen2 = 22 * scale;
+  const legLen1 = 23 * scale;
+  const legLen2 = 23 * scale;
+
+  // Animation offsets
+  const breatheOffset = Math.sin(time * 0.003) * 3;
+  const gunBobX = Math.sin(time * 0.002) * 2;
+  const gunBobY = Math.cos(time * 0.002) * 2;
+
+  const directionSign = isRight ? 1 : -1;
+  const px = 100;
+  const py = 80;
+  
+  const neck = { x: px, y: py - 32 * scale + breatheOffset };
+  const pelvis = { x: px, y: py + 3 * scale + breatheOffset };
+  
+  const backHandTarget = { x: neck.x + directionSign * (32 * scale + gunBobX), y: neck.y + 14 * scale + gunBobY };
+  const frontHandTarget = { x: neck.x + directionSign * (45 * scale + gunBobX), y: neck.y + 8 * scale + gunBobY };
+  
+  const backElbow = solveIK(neck, backHandTarget, armLen1, armLen2, !isRight);
+  const frontElbow = solveIK(neck, frontHandTarget, armLen1, armLen2, !isRight);
+  
+  const groundY = py + 47.5 * scale;
+  const leftFootTarget = { x: pelvis.x - 12 * scale, y: groundY };
+  const rightFootTarget = { x: pelvis.x + 12 * scale, y: groundY };
+  
+  const leftKnee = solveIK(pelvis, leftFootTarget, legLen1, legLen2, isRight);
+  const rightKnee = solveIK(pelvis, rightFootTarget, legLen1, legLen2, isRight);
+
+  return (
+    <svg viewBox="0 0 200 250" style={{ width: '100%', height: '100%', overflow: 'visible' }}>
+      <g stroke={color} strokeWidth={4 * scale} strokeLinecap="round" strokeLinejoin="round" fill="none">
+        <circle cx={neck.x} cy={neck.y - headRadius} r={headRadius} fill={color} />
+        <line x1={neck.x} y1={neck.y} x2={pelvis.x} y2={pelvis.y} />
+        <line x1={neck.x} y1={neck.y} x2={backElbow.x} y2={backElbow.y} />
+        <line x1={backElbow.x} y1={backElbow.y} x2={backHandTarget.x} y2={backHandTarget.y} />
+        <line x1={neck.x} y1={neck.y} x2={frontElbow.x} y2={frontElbow.y} />
+        <line x1={frontElbow.x} y1={frontElbow.y} x2={frontHandTarget.x} y2={frontHandTarget.y} />
+        <line x1={pelvis.x} y1={pelvis.y} x2={leftKnee.x} y2={leftKnee.y} />
+        <line x1={leftKnee.x} y1={leftKnee.y} x2={leftFootTarget.x} y2={leftFootTarget.y} />
+        <line x1={pelvis.x} y1={pelvis.y} x2={rightKnee.x} y2={rightKnee.y} />
+        <line x1={rightKnee.x} y1={rightKnee.y} x2={rightFootTarget.x} y2={rightFootTarget.y} />
+      </g>
+      <g transform={`translate(${frontHandTarget.x}, ${frontHandTarget.y}) scale(${isRight ? 1 : -1}, 1)`}>
+         <g transform={`translate(${-weaponOffset.x * 2.5 * scale}, ${-weaponOffset.y * 2.5 * scale})`}>
+           <WeaponSvg data={weaponData} color={weaponColor} scale={2.5 * scale} />
+         </g>
+      </g>
+    </svg>
+  );
+};
 
 function SplashView() {
   const bgCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -324,21 +428,26 @@ function SplashView() {
           bottom: ENGINE_CONFIG.layout.leftStickman.bottom,      
           width: ENGINE_CONFIG.layout.leftStickman.width,      
           height: ENGINE_CONFIG.layout.leftStickman.height,     
-          backgroundColor: 'rgba(0, 229, 255, 0.04)',
-          border: '2px dashed rgba(0, 229, 255, 0.35)',
-          borderRadius: '12px',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          color: '#00e5ff',
-          fontFamily: 'monospace',
+          backgroundColor: 'transparent',
+          border: 'none',
           zIndex: 2,
-          textAlign: 'center',
           boxSizing: 'border-box'
         }}
       >
-        {/* <img src="assets/left_player.png" alt="Left Brawler" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> */}
-        <span style={{ fontSize: '11px', opacity: 0.65 }}>[LEFT STICKMAN SPRITE]</span>
+        <StickmanSvg 
+           color="#06b6d4" 
+           weaponColor="#ec4899" 
+           isRight={true} 
+           weaponData={[
+            "  NNNNNNNNNNNNN ",
+            " N             N",
+            "  NNNNNNNN   N N",
+            "      N  N N    ",
+            "      N  NN     ",
+            "      NNNN      "
+           ]}
+           weaponOffset={{ x: 6, y: 4 }}
+        />
       </div>
 
       <div
@@ -349,21 +458,28 @@ function SplashView() {
           bottom: ENGINE_CONFIG.layout.rightStickman.bottom,     
           width: ENGINE_CONFIG.layout.rightStickman.width,
           height: ENGINE_CONFIG.layout.rightStickman.height,
-          backgroundColor: 'rgba(0, 229, 255, 0.04)',
-          border: '2px dashed rgba(0, 229, 255, 0.35)',
-          borderRadius: '12px',
-          display: 'flex',
-          justifyContent: 'center',
-          alignItems: 'center',
-          color: '#00e5ff',
-          fontFamily: 'monospace',
+          backgroundColor: 'transparent',
+          border: 'none',
           zIndex: 2,
-          textAlign: 'center',
           boxSizing: 'border-box'
         }}
       >
-        {/* <img src="assets/right_player.png" alt="Right Brawler" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> */}
-        <span style={{ fontSize: '11px', opacity: 0.65 }}>[RIGHT STICKMAN SPRITE]</span>
+        <StickmanSvg 
+           color="#ec4899" 
+           weaponColor="#06b6d4" 
+           isRight={false} 
+           weaponData={[
+            "        NNNN    ",
+            "       N    N   ",
+            "  NNNNNNNNNNNNNNNNNNNNNN ",
+            " N                      N",
+            "  NNNNNNNN   N NNNNNNNNN ",
+            "      N   N N           ",
+            "      N   NN            ",
+            "      NNNN              "
+           ]}
+           weaponOffset={{ x: 6, y: 5 }}
+        />
       </div>
 
       {/* LAYER 3: UI WRAPPERS */}
@@ -381,17 +497,19 @@ function SplashView() {
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: 'rgba(255, 255, 255, 0.03)',
-            border: '2px dashed rgba(255, 255, 255, 0.25)',
-            borderRadius: '8px',
-            color: '#aaaaab',
-            fontFamily: 'monospace',
+            backgroundColor: 'transparent',
+            border: 'none',
+            color: '#fff',
+            textShadow: '0 0 10px #00e5ff, 0 0 20px #00e5ff, 0 0 40px #ec4899',
+            fontFamily: 'Impact, sans-serif',
             textAlign: 'center',
-            fontSize: '11px',
+            fontSize: '72px',
+            fontStyle: 'italic',
+            letterSpacing: '8px',
+            textTransform: 'uppercase',
             boxSizing: 'border-box'
         }}>
-            {/* <img src="assets/title_logo.png" alt="Frag Arena" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> */}
-            <span>[ GAME TITLE LOGO SPRITE ]</span>
+            FRAG ARENA
         </div>
 
         {/* PLAY NOW BUTTON */}
@@ -409,23 +527,26 @@ function SplashView() {
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
-            backgroundColor: 'rgba(0, 229, 255, 0.08)',
-            border: '2px dashed #00e5ff',
+            backgroundColor: 'rgba(236, 72, 153, 0.2)',
+            border: '2px solid #ec4899',
+            boxShadow: '0 0 15px #ec4899',
             borderRadius: '8px',
-            color: '#00e5ff',
-            fontFamily: 'monospace',
+            color: '#fff',
+            textShadow: '0 0 8px #fff',
+            fontFamily: 'Impact, sans-serif',
             textAlign: 'center',
-            fontSize: '12px',
-            transition: 'transform 0.1s ease, background-color 0.2s ease',
+            fontSize: '36px',
+            fontWeight: 'bold',
+            letterSpacing: '2px',
+            transition: 'transform 0.1s ease, background-color 0.2s ease, box-shadow 0.2s ease',
             boxSizing: 'border-box'
           }}
-          onMouseDown={(e) => (e.currentTarget.style.transform = 'translateX(-50%) scale(0.96)')}
-          onMouseUp={(e) => (e.currentTarget.style.transform = 'translateX(-50%) scale(1)')}
-          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0, 229, 255, 0.18)')}
-          onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'rgba(0, 229, 255, 0.08)')}
+          onMouseDown={(e) => { e.currentTarget.style.transform = 'translateX(-50%) scale(0.96)'; e.currentTarget.style.boxShadow = '0 0 30px #ec4899'; }}
+          onMouseUp={(e) => { e.currentTarget.style.transform = 'translateX(-50%) scale(1)'; e.currentTarget.style.boxShadow = '0 0 15px #ec4899'; }}
+          onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = 'rgba(236, 72, 153, 0.4)')}
+          onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = 'rgba(236, 72, 153, 0.2)'; e.currentTarget.style.transform = 'translateX(-50%) scale(1)'; }}
         >
-            {/* <img src="assets/play_button.png" alt="Play Now" style={{ width: '100%', height: '100%', objectFit: 'contain' }} /> */}
-            <span>[ PLAY NOW BUTTON SPRITE ]</span>
+            PLAY NOW
         </div>
       </div>
 

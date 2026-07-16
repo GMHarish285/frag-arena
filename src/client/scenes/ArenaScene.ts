@@ -20,12 +20,26 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   private player1!: Player;
   public dummy!: Player;
   private aiController!: AIController;
+  private botControllerP1?: AIController;
+  public isBackgroundMode: boolean = false;
+  public isGamePaused: boolean = false;
+
+  init(data?: any) {
+    this.isBackgroundMode = data?.isBackgroundMode || false;
+  }
+
   private playersGroup!: Phaser.Physics.Arcade.Group;
 
   private platforms!: Phaser.Physics.Arcade.StaticGroup;
   private crates!: Phaser.Physics.Arcade.StaticGroup; // New crates group
 
   private projectiles!: Phaser.Physics.Arcade.Group;
+  private p1Ammo: number = 0;
+  private dummyAmmo: number = 0;
+  
+  private p1HUD!: Phaser.GameObjects.Text;
+  private dummyHUD!: Phaser.GameObjects.Text;
+
   private rockets!: Phaser.Physics.Arcade.Group;
   private solidBombs!: Phaser.Physics.Arcade.Group;
   private meleeSlashes!: Phaser.Physics.Arcade.Group;
@@ -40,10 +54,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
 
   // Independent Player States
   private p1WeaponIndex: number = 0;
-  private p1Ammo: number = -1; // -1 represents infinite (Pistol)
 
   private dummyWeaponIndex: number = 0;
-  private dummyAmmo: number = -1;
 
   private arenaConfig!: IArenaConfig;
   private currentArenaId: string = 'neonClassic';
@@ -143,7 +155,12 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.player1.equipWeapon(0);
     this.dummy.equipWeapon(0);
 
-    this.aiController = new AIController(this, this.dummy, this.player1, 'HARD');
+    if (this.isBackgroundMode) {
+      this.aiController = new AIController(this, this.dummy, this.player1, 'HARD');
+      this.botControllerP1 = new AIController(this, this.player1, this.dummy, 'HARD');
+    } else {
+      this.aiController = new AIController(this, this.dummy, this.player1, 'HARD');
+    }
 
     this.playersGroup.add(this.player1.sprite);
     this.playersGroup.add(this.dummy.sprite);
@@ -201,13 +218,18 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       ignoreSelf,
       this
     );
-
-    this.scoreText = this.add.text(50, 50, '', {
-      fontSize: '24px',
-      color: '#818384',
-      fontFamily: 'sans-serif',
-    });
-    this.cameras.main.ignore(this.scoreText);
+    const hudStyle = {
+      fontSize: '28px',
+      fontFamily: 'Impact, sans-serif',
+      color: '#ffffff',
+      fontStyle: 'italic',
+      stroke: '#000000',
+      strokeThickness: 4,
+    };
+    
+    this.p1HUD = this.add.text(40, 30, '', hudStyle).setShadow(0, 0, '#00e5ff', 8, false, true);
+    this.dummyHUD = this.add.text(1880, 30, '', hudStyle).setOrigin(1, 0).setShadow(0, 0, '#ec4899', 8, false, true).setAlign('right');
+    this.cameras.main.ignore([this.p1HUD, this.dummyHUD]);
 
     const createWeapons = () => [
       new Pistol(this),
@@ -232,24 +254,49 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       'W,A,S,D,T,Y,ONE,TWO,THREE,FOUR,FIVE,SIX,SEVEN,EIGHT,NINE,ZERO'
     ) as any;
 
-    // Add this inside ArenaScene's create() method:
-    const quitBtn = this.add
-      .text(20, 20, 'QUIT TO MENU', {
-        fontSize: '20px',
-        fontFamily: 'monospace',
+    if (this.isBackgroundMode) {
+      this.uiCamera.setVisible(false);
+      if (this.p1HUD) this.p1HUD.setVisible(false);
+      if (this.dummyHUD) this.dummyHUD.setVisible(false);
+    } else {
+      const btnStyle = {
+        fontSize: '32px',
         color: '#ffffff',
-        backgroundColor: '#ff3333',
-        padding: { x: 10, y: 5 },
-      })
-      .setInteractive({ useHandCursor: true })
-      .setDepth(100); // Keeps it rendered above the stickman
+        backgroundColor: '#111115',
+        padding: { x: 15, y: 10 },
+      };
 
-    this.cameras.main.ignore(quitBtn);
+      const pauseBtn = this.add.text(960 - 50, 20, '⏸', btnStyle)
+        .setOrigin(0.5, 0)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(100)
+        .setShadow(0, 0, '#00e5ff', 8, false, true);
 
-    quitBtn.on('pointerup', () => {
-      // Tells the Scene Manager to shut down the arena and boot the menu
-      this.scene.start('MainMenuScene');
-    });
+      const quitBtn = this.add.text(960 + 50, 20, '✖', btnStyle)
+        .setOrigin(0.5, 0)
+        .setInteractive({ useHandCursor: true })
+        .setDepth(100)
+        .setShadow(0, 0, '#ff0055', 8, false, true);
+
+      this.cameras.main.ignore([pauseBtn, quitBtn]);
+
+      pauseBtn.on('pointerup', () => {
+        this.isGamePaused = !this.isGamePaused;
+        if (this.isGamePaused) {
+          this.physics.pause();
+          pauseBtn.setText('▶');
+          pauseBtn.setShadow(0, 0, '#ec4899', 8, false, true);
+        } else {
+          this.physics.resume();
+          pauseBtn.setText('⏸');
+          pauseBtn.setShadow(0, 0, '#00e5ff', 8, false, true);
+        }
+      });
+
+      quitBtn.on('pointerup', () => {
+        this.scene.start('MainMenuScene');
+      });
+    }
 
     this.createMobileHUD();
   }
@@ -317,22 +364,22 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     const leftY = 850;
     const leftSpacing = 130;
 
-    createBtn(leftX - leftSpacing, leftY, 'A', ['A'], 70);       // LEFT
-    createBtn(leftX + leftSpacing, leftY, 'D', ['D'], 70);       // RIGHT
+    createBtn(leftX - leftSpacing, leftY, '←', ['A'], 70);       // LEFT
+    createBtn(leftX + leftSpacing, leftY, '→', ['D'], 70);       // RIGHT
 
     // --- RIGHT SIDE: ACTIONS (W, S, T, Y) ---
     const rightX = 1920 - 300;
     const rightY = 800;
     const rightSpacing = 130;
 
-    createBtn(rightX, rightY - rightSpacing, 'W\n(JUMP)', ['W'], 65);     // UP / JUMP
-    createBtn(rightX, rightY + rightSpacing, 'S\n(DROP)', ['S'], 65);     // DOWN / DROP
+    createBtn(rightX, rightY - rightSpacing, '↑', ['W'], 65);     // UP / JUMP
+    createBtn(rightX, rightY + rightSpacing, '↓', ['S'], 65);     // DOWN / DROP
     
     // Primary Fire (T)
-    createBtn(rightX - rightSpacing, rightY, 'PRI\n(T)', ['T'], 70);
+    createBtn(rightX - rightSpacing, rightY, 'FIRE', ['T'], 70);
     
     // Secondary Fire (Y)
-    createBtn(rightX + rightSpacing, rightY, 'SEC\n(Y)', ['Y'], 60);
+    createBtn(rightX + rightSpacing, rightY, 'ALT', ['Y'], 60);
   }
 
   public buildArena(arenaId: string) {
@@ -823,7 +870,15 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   // --- GAME LOOP ---
 
   override update(time: number, delta: number) {
-    this.player1.update(this.keys, delta);
+    if (this.isGamePaused) return;
+
+    if (this.isBackgroundMode && this.botControllerP1) {
+      this.botControllerP1.update(time, delta);
+      this.player1.update(this.botControllerP1.getKeys(), delta);
+    } else {
+      this.player1.update(this.keys, delta);
+    }
+    
     if (this.aiController) {
       this.aiController.update(time, delta);
     } else {
@@ -898,48 +953,47 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     const p1Wep = this.p1Weapons[this.p1WeaponIndex];
     const dummyWep = this.dummyWeapons[this.dummyWeaponIndex];
 
-    const getAmmoText = (wep: Weapon | undefined, globalAmmo: number) => {
-      if (!wep) return '0';
-      if (wep.id === 0) {
-        if (wep.isReloading) return 'RELOADING...';
-        return `${wep.currentAmmo} / ∞`;
-      }
-      return (globalAmmo === -1 || globalAmmo === null) ? '∞' : `${globalAmmo}`;
+    const getAmmoText = (w: any, ammo: number) => {
+      if (w.maxAmmo === Infinity || w.maxAmmo === -1) return 'INF';
+      return `${ammo}`;
     };
 
-    this.scoreText.setText(
-      `P1 [${p1WepName}]: HP ${this.player1.health} | Stocks: ${this.player1.lives} | Ammo: ${getAmmoText(p1Wep, this.p1Ammo)}\n` +
-        `DUMMY [${dummyWepName}]: HP ${this.dummy.health} | Stocks: ${this.dummy.lives} | Ammo: ${getAmmoText(dummyWep, this.dummyAmmo)}`
+    this.p1HUD.setText(
+      `P1 LIVES: ${this.player1.lives}  |  HP: ${this.player1.health}%\n` +
+      `WEAPON: ${p1WepName}  |  AMMO: ${getAmmoText(p1Wep, this.p1Ammo)}`
+    );
+    this.dummyHUD.setText(
+      `ENEMY LIVES: ${this.dummy.lives}  |  HP: ${this.dummy.health}%\n` +
+      `WEAPON: ${dummyWepName}  |  AMMO: ${getAmmoText(dummyWep, this.dummyAmmo)}`
     );
 
-    // Dev cheats for weapon switching
-    if (Phaser.Input.Keyboard.JustDown(this.keys.ONE))
-      this.giveWeaponToPlayer(this.player1, 0);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.TWO))
-      this.giveWeaponToPlayer(this.player1, 1);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.THREE))
-      this.giveWeaponToPlayer(this.player1, 2);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.FOUR))
-      this.giveWeaponToPlayer(this.player1, 3);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.FIVE))
-      this.giveWeaponToPlayer(this.player1, 4);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.SIX))
-      this.giveWeaponToPlayer(this.player1, 5);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.SEVEN))
-      this.giveWeaponToPlayer(this.player1, 6);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.EIGHT))
-      this.giveWeaponToPlayer(this.player1, 7);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.NINE))
-      this.giveWeaponToPlayer(this.player1, 8);
-    if (Phaser.Input.Keyboard.JustDown(this.keys.ZERO))
-      this.giveWeaponToPlayer(this.player1, 9);
+    // Dev cheats for weapon switchingon switching
+    if (!this.isBackgroundMode) {
+      if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) this.giveWeaponToPlayer(this.player1, 0);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.TWO)) this.giveWeaponToPlayer(this.player1, 1);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.THREE)) this.giveWeaponToPlayer(this.player1, 2);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.FOUR)) this.giveWeaponToPlayer(this.player1, 3);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.FIVE)) this.giveWeaponToPlayer(this.player1, 4);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.SIX)) this.giveWeaponToPlayer(this.player1, 5);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.SEVEN)) this.giveWeaponToPlayer(this.player1, 6);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.EIGHT)) this.giveWeaponToPlayer(this.player1, 7);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.NINE)) this.giveWeaponToPlayer(this.player1, 8);
+      if (Phaser.Input.Keyboard.JustDown(this.keys.ZERO)) this.giveWeaponToPlayer(this.player1, 9);
+    }
 
     // Route inputs to the Player 1's currently active weapon state
     const activeWep = this.p1Weapons[this.p1WeaponIndex];
     if (activeWep) {
-      if (this.keys.T.isDown) activeWep.primaryAttack(this.player1);
-      if (this.keys.Y.isDown) activeWep.secondaryAttack(this.player1);
-      activeWep.updateState(this.keys, this.player1);
+      if (this.isBackgroundMode && this.botControllerP1) {
+        const aiKeysP1 = this.botControllerP1.getKeys();
+        if (aiKeysP1.T.isDown) activeWep.primaryAttack(this.player1);
+        if (aiKeysP1.Y.isDown) activeWep.secondaryAttack(this.player1);
+        activeWep.updateState(aiKeysP1, this.player1);
+      } else {
+        if (this.keys.T.isDown) activeWep.primaryAttack(this.player1);
+        if (this.keys.Y.isDown) activeWep.secondaryAttack(this.player1);
+        activeWep.updateState(this.keys, this.player1);
+      }
     }
 
     // Route inputs to Dummy's currently active weapon state from AI

@@ -1,30 +1,39 @@
-## Devvit Phaser Starter
+# Frag Arena
 
-A starter to build web applications on Reddit's developer platform
+Frag Arena is a high-octane, synthwave-themed 2D platform fighter built specifically for the Reddit platform using the Devvit framework and Phaser 3.
 
-- [Devvit](https://developers.reddit.com/): A way to build and deploy immersive games on Reddit
-- [Vite](https://vite.dev/): For compiling the webView
-- [Phaser](https://phaser.io/): 2D game engine
-- [Hono](https://hono.dev/): For backend logic
-- [TypeScript](https://www.typescriptlang.org/): For type safety
+## Features
 
-## Getting Started
+- **Retro Synthwave Aesthetic**: A beautiful neon art style with custom procedural graphics and particle effects.
+- **Fast-Paced Combat**: Smooth, responsive 2D platforming physics paired with dynamic shooting mechanics.
+- **Procedural IK Animation**: Stickman characters are brought to life through real-time inverse kinematics and procedural animations.
+- **Bot vs Bot**: Drop into the background of the main menu and watch high-level AI bots duel it out.
+- **Touch-Friendly HUD**: A specialized mobile layout built explicitly for seamless play on smartphones within the Reddit feed.
 
-> Make sure you have Node 22 downloaded on your machine before running!
+## Tech Stack
 
-1. Run `npm create devvit@latest --template=phaser`
-2. Go through the installation wizard. You will need to create a Reddit account and connect it to Reddit developers
-3. Copy the command on the success page into your terminal
+- **Frontend**: Phaser 3, React (Vite)
+- **Backend Environment**: Node.js (Reddit Devvit Serverless)
+- **Communication**: tRPC
 
-## Commands
+## Project Structure
 
-- `npm run dev`: Starts a development server where you can develop your application live on Reddit.
-- `npm run build`: Builds your client and server projects
-- `npm run deploy`: Uploads a new version of your app
-- `npm run launch`: Publishes your app for review
-- `npm run login`: Logs your CLI into Reddit
-- `npm run type-check`: Type checks, lints, and prettifies your app
+- `/src/client`: Frontend React & Phaser code (executed in a secure iframe on reddit.com).
+- `/src/server`: Backend serverless logic running on Devvit.
 
-## Credits
+## Scripts
 
-Thanks to the Phaser team for [providing a great template](https://github.com/phaserjs/template-vite-ts)!
+- `npm run dev`: Boot up the Reddit Devvit playtest environment.
+- `npm run dev:client`: Start the local Vite server to test frontend changes outside of Reddit.
+- `npm run type-check`: Validate TypeScript types.
+- `npm run lint`: Run the linter.
+
+## Deployment
+
+To push your changes directly to the Reddit platform, use the Devvit CLI:
+
+```bash
+npx devvit upload
+```
+
+This commands packages the game and pushes the latest bundle to your active Reddit app namespace.

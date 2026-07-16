@@ -10,6 +10,6 @@ export const BasePlayerConfig = {
   },
   stats: {
     maxHealth: 100,
-    startingLives: 3,
+    startingLives: 10,
   },
 };
