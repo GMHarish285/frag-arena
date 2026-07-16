@@ -75,11 +75,12 @@ export const ARENA_REGISTRY: Record<string, IArenaConfig> = {
   neonClassic: {
     id: 'neonClassic',
     name: 'Neon Classic Arena',
-    map: MAP_REGISTRY['classic']!,
+    map: MAP_REGISTRY['neonClassic']!,
     layers: [
-      { texture: 'neon_bg1', scrollFactorX: 0, scrollFactorY: 0.0, depth: -3 },
+      { texture: 'neon_bg1', scrollFactorX: 0, scrollFactorY: 0, depth: -3 },
       { texture: 'neon_bg2', scrollFactorX: 0.3, scrollFactorY: 0.3, depth: -2 },
-      { texture: 'neon_bg3', scrollFactorX: 0.7, scrollFactorY: 0.7, depth: -1 },
+      { texture: 'neon_bg3-2', scrollFactorX: 0.7, scrollFactorY: 0.7, depth: -1 },
+      // { texture: 'neon_bg3', scrollFactorX: 0.7, scrollFactorY: 0.7, depth: -1 },
     ],
     crateConfig: {
       enabled: true,
@@ -88,7 +89,7 @@ export const ARENA_REGISTRY: Record<string, IArenaConfig> = {
     },
     defaultWeaponIndex: 0,
     cameraConfig: {
-      maxZoom: 1.0,
+      maxZoom: 1.1,
       zoomInterpolation: 0.05,
       panInterpolation: 0.1,
     },

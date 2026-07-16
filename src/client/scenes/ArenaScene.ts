@@ -49,15 +49,14 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   private currentArenaId: string = 'neonClassic';
   private bgLayers: Phaser.GameObjects.Image[] = [];
   private crateSpawnEvent?: Phaser.Time.TimerEvent;
+  private gridFlashEvent?: Phaser.Time.TimerEvent;
 
   constructor() {
     super({ key: 'ArenaScene' });
   }
 
   preload() {
-    this.load.image('neon_bg1', 'assets/background/neon_arena_bg1.png');
-    this.load.image('neon_bg2', 'assets/background/neon_arena_bg2.png');
-    this.load.image('neon_bg3', 'assets/background/neon_arena_bg3.png');
+    // Dynamic generation handles textures, no need to preload background images
   }
 
   create() {
@@ -75,21 +74,49 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.meleeSlashes = this.physics.add.group();
 
     // Asset Generation
-    this.generateStripedBulletTexture('bullet_small_tex', 24, 6, 0x0055aa, 0x00ffff);
-    this.generateStripedBulletTexture('bullet_smg_tex', 40, 6, 0x0055aa, 0x00ffff);
-    this.generateStripedBulletTexture('bullet_medium_tex', 32, 10, 0x0055aa, 0x00ffff);
-    this.generateStripedBulletTexture('bullet_large_tex', 48, 14, 0x0055aa, 0x00ffff);
+    const p1WepColor = 0x06b6d4; // Cyan
+    const dummyWepColor = 0xff2222; // Red
+
+    const createPlayerBullets = (id: string, color: number) => {
+        this.generateStripedBulletTexture(`bullet_small_tex_${id}`, 24, 6, 0x000000, color);
+        this.generateStripedBulletTexture(`bullet_smg_tex_${id}`, 40, 6, 0x000000, color);
+        this.generateStripedBulletTexture(`bullet_medium_tex_${id}`, 32, 10, 0x000000, color);
+        this.generateStripedBulletTexture(`bullet_large_tex_${id}`, 48, 14, 0x000000, color);
+    };
+    
+    createPlayerBullets('p1', p1WepColor);
+    createPlayerBullets('dummy', dummyWepColor);
     this.generateWeaponTexture(0, 'pistol_thrown_tex'); // Dynamically generate from WeaponConfig model
     this.generateWeaponTexture(2, 'knife_tex');
     this.generateWeaponTexture(3, 'bomb_tex');
     this.generateBetterRocketTexture('rocket_tex');
     this.generateTexture('slash_tex', 60, 60, 0xffffff);
-    this.generateTexture('crate_tex', 32, 32, 0xd2b48c); // Supply Crate
+    // Generate Neon Crate Texture
+    const crateGraphics = this.add.graphics();
+    crateGraphics.fillStyle(0x1a1a1a, 1); // Dark inner body
+    crateGraphics.fillRect(0, 0, 64, 64);
 
+    crateGraphics.lineStyle(4, 0x39ff14, 1); // Neon Green border
+    crateGraphics.strokeRect(2, 2, 60, 60);
+
+    crateGraphics.beginPath(); // 'X' cross design
+    crateGraphics.moveTo(8, 8);
+    crateGraphics.lineTo(56, 56);
+    crateGraphics.moveTo(56, 8);
+    crateGraphics.lineTo(8, 56);
+    crateGraphics.strokePath();
+
+    crateGraphics.fillStyle(0xffffff, 1); // Bright center dot
+    crateGraphics.fillRect(28, 28, 8, 8);
+
+    crateGraphics.generateTexture('crate_tex', 64, 64);
+    crateGraphics.destroy();
     // Background layers placeholder textures
     this.generateTexture('bg_layer_3', 1920, 1080, 0x111133);
     this.generateTexture('bg_layer_2', 1920, 1080, 0x222244);
     this.generateTexture('bg_layer_1', 1920, 1080, 0x333355);
+
+    this.generateNeonBackgrounds();
 
     this.buildArena(this.currentArenaId);
 
@@ -100,9 +127,8 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       spawnPoints.player1.y,
       'p1',
       'team_A',
-      0xff4500,
-      100,
-      10
+      0x3b82f6, // player body color (blue shade)
+      p1WepColor // weapon color (cyan)
     );
     this.dummy = new Player(
       this,
@@ -110,15 +136,14 @@ export class ArenaScene extends Phaser.Scene implements IArena {
       spawnPoints.dummy.y,
       'dummy',
       'team_B',
-      0x0088ff,
-      100,
-      10
+      0xef4444, // enemy body color (red shade)
+      dummyWepColor // weapon color (red)
     );
 
     this.player1.equipWeapon(0);
     this.dummy.equipWeapon(0);
 
-    // this.aiController = new AIController(this, this.dummy, this.player1, 'HARD');
+    this.aiController = new AIController(this, this.dummy, this.player1, 'HARD');
 
     this.playersGroup.add(this.player1.sprite);
     this.playersGroup.add(this.dummy.sprite);
@@ -369,6 +394,57 @@ export class ArenaScene extends Phaser.Scene implements IArena {
         loop: true,
       });
     }
+
+    // Reset grid flash timer
+    if (this.gridFlashEvent) {
+      this.gridFlashEvent.destroy();
+    }
+    if (this.currentArenaId === 'neonClassic') {
+      this.gridFlashEvent = this.time.addEvent({
+        delay: 400, // spawn flashes much more frequently
+        callback: this.spawnGridFlash,
+        callbackScope: this,
+        loop: true,
+      });
+    }
+  }
+
+  private spawnGridFlash() {
+    const isHorizontal = Math.random() > 0.5;
+    let startX, startY, endX, endY, angle;
+
+    if (isHorizontal) {
+      startX = -320 - 200; // start slightly off-grid left (image left bound is -320)
+      endX = 2240 + 200;   // end slightly off-grid right (image right bound is 2240)
+      startY = Math.floor(Math.random() * (1080 / 100)) * 100;
+      endY = startY;
+      angle = 0;
+    } else {
+      startX = -320 + Math.floor(Math.random() * (2560 / 100)) * 100;
+      endX = startX;
+      startY = 0 - 200;
+      endY = 1080 + 200;
+      angle = 90;
+    }
+
+    const flash = this.add.image(startX, startY, 'grid_flash');
+    flash.setAngle(angle);
+    flash.setDepth(-1.9); // Above the grid (-2) but below mountains (-1)
+    flash.setScrollFactor(0.3, 0.3); // Match grid scroll factor
+    
+    // Ignore in UI
+    this.uiCamera.ignore(flash);
+
+    this.tweens.add({
+      targets: flash,
+      x: endX,
+      y: endY,
+      duration: Phaser.Math.Between(1500, 2500),
+      ease: 'Linear',
+      onComplete: () => {
+        flash.destroy();
+      }
+    });
   }
 
   // --- CRATE & WEAPON MANAGEMENT ---
@@ -380,8 +456,19 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     const platforms = this.arenaConfig.map.platforms;
     if (!platforms || platforms.length === 0) return;
 
-    // Pick a random platform
-    const plat = Phaser.Utils.Array.GetRandom(platforms);
+    // Pick a random platform weighted by its width
+    const totalWidth = platforms.reduce((sum, p) => sum + p.width, 0);
+    let rand = Math.random() * totalWidth;
+    let plat = platforms[0];
+    if (!plat) return;
+
+    for (const p of platforms) {
+      if (rand < p.width) {
+        plat = p;
+        break;
+      }
+      rand -= p.width;
+    }
 
     // Calc valid boundaries on top of the platform
     const minX = plat.x - plat.width / 2 + 16;
@@ -395,6 +482,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
   }
 
   private handleCratePickup(pSprite: any, crateSprite: any) {
+    this.spawnParticles(crateSprite.x, crateSprite.y, 0x39ff14, 20);
     crateSprite.destroy(); // Consume crate
     const player = pSprite.getData('entity') as Player;
 
@@ -541,10 +629,11 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     damage: number,
     angularVelocity: number = 0
   ) {
+    const finalTexture = texture.includes('bullet') ? `${texture}_${shooter.id}` : texture;
     const proj = this.projectiles.create(
       x,
       y,
-      texture
+      finalTexture
     ) as Phaser.Physics.Arcade.Sprite;
     (proj.body as any).allowGravity = hasGravity;
     proj.setVelocity(velocityX, velocityY);
@@ -702,7 +791,7 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     this.uiCamera.ignore(blast);
 
     // Visuals using Blitter for multiple pellets
-    const blitter = this.add.blitter(0, 0, 'bullet_medium_tex');
+    const blitter = this.add.blitter(0, 0, `bullet_medium_tex_${shooter.id}`);
     const visualPellets = 10;
     for(let i = 0; i < visualPellets; i++) {
         const targetX = x + (facing === 'RIGHT' ? range : -range) * Phaser.Math.FloatBetween(0.3, 1);
@@ -1018,6 +1107,105 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     g.destroy();
   }
 
+  private generateNeonBackgrounds() {
+    // 1. Farthest layer (neon_bg1): gradient black to dark blue
+    if (!this.textures.exists('neon_bg1')) {
+      const canvasTexture = this.textures.createCanvas('neon_bg1', 2560, 1080);
+      if (canvasTexture) {
+        const context = canvasTexture.getContext();
+        const gradient = context.createLinearGradient(0, 0, 0, 1080);
+        gradient.addColorStop(0, '#000000');
+        gradient.addColorStop(0.33, '#000000'); // Transition starts smoothly at 1/3rd down
+        gradient.addColorStop(1, '#000044'); // Ends at dark blue
+        context.fillStyle = gradient;
+        context.fillRect(0, 0, 2560, 1080);
+        canvasTexture.refresh();
+      }
+    }
+
+    if (!this.textures.exists('grid_flash')) {
+      const flashTex = this.textures.createCanvas('grid_flash', 300, 4);
+      if (flashTex) {
+        const ctx = flashTex.getContext();
+        const grd = ctx.createLinearGradient(0, 0, 300, 0);
+        grd.addColorStop(0, 'rgba(6, 182, 212, 0)');
+        grd.addColorStop(0.5, 'rgba(6, 182, 212, 0.3)');
+        grd.addColorStop(1, 'rgba(6, 182, 212, 0)');
+        ctx.fillStyle = grd;
+        ctx.fillRect(0, 0, 300, 4);
+        flashTex.refresh();
+      }
+    }
+
+    // 2. Middle layer (neon_bg2): Grid layout like splash screen
+    const bg2 = this.add.graphics();
+    bg2.lineStyle(2, 0x06b6d4, 0.3); // Cyan
+    const gridSize = 100;
+    for (let x = 0; x <= 2560; x += gridSize) {
+      bg2.beginPath();
+      bg2.moveTo(x, 0);
+      bg2.lineTo(x, 1080);
+      bg2.strokePath();
+    }
+    for (let y = 0; y <= 1080; y += gridSize) {
+      bg2.beginPath();
+      bg2.moveTo(0, y);
+      bg2.lineTo(2560, y);
+      bg2.strokePath();
+    }
+    bg2.generateTexture('neon_bg2', 2560, 1080);
+    bg2.destroy();
+
+    // 3. Nearest layer (neon_bg3-2): simple triangle mountains, some having grids in them
+    const bg3 = this.add.graphics();
+    
+    const mountains = [
+      { x: 300, width: 550, height: 350, hasGrid: true },
+      { x: 1000, width: 800, height: 500, hasGrid: false },
+      { x: 1700, width: 650, height: 400, hasGrid: true },
+      { x: 2300, width: 550, height: 300, hasGrid: false },
+    ];
+
+    mountains.forEach(m => {
+      bg3.fillStyle(0x000000, 1);
+      bg3.lineStyle(4, 0xec4899, 1); // Pink
+      bg3.beginPath();
+      bg3.moveTo(m.x - m.width/2, 1080);
+      bg3.lineTo(m.x, 1080 - m.height);
+      bg3.lineTo(m.x + m.width/2, 1080);
+      bg3.closePath();
+      bg3.fillPath();
+      bg3.strokePath();
+
+      if (m.hasGrid) {
+        bg3.lineStyle(2, 0xec4899, 0.4);
+        const mtGridSize = 60;
+        // Horizontal lines
+        for(let y = 1080 - m.height + mtGridSize; y <= 1080; y += mtGridSize) {
+          const progress = (y - (1080 - m.height)) / m.height;
+          const currentWidth = m.width * progress;
+          bg3.beginPath();
+          bg3.moveTo(m.x - currentWidth/2, y);
+          bg3.lineTo(m.x + currentWidth/2, y);
+          bg3.strokePath();
+        }
+        // Vertical lines
+        for(let x = m.x - m.width/2 + mtGridSize; x < m.x + m.width/2; x += mtGridSize) {
+          const dx = Math.abs(x - m.x);
+          const progress = dx / (m.width/2);
+          const currentHeight = m.height * (1 - progress);
+          bg3.beginPath();
+          bg3.moveTo(x, 1080);
+          bg3.lineTo(x, 1080 - currentHeight);
+          bg3.strokePath();
+        }
+      }
+    });
+
+    bg3.generateTexture('neon_bg3-2', 2560, 1080);
+    bg3.destroy();
+  }
+
   private createPlatform(
     x: number,
     y: number,
@@ -1025,12 +1213,52 @@ export class ArenaScene extends Phaser.Scene implements IArena {
     height: number,
     color: number
   ) {
-    this.generateTexture(`plat_${width}x${height}`, width, height, color);
-    const plat = this.platforms.create(x, y, `plat_${width}x${height}`);
+    const key = `plat_${width}x${height}_${color}`;
+    if (!this.textures.exists(key)) {
+      const g = this.add.graphics();
+      // Main body
+      g.fillStyle(color, 1);
+      g.fillRect(0, 0, width, height);
+      // Neon border (cyan/pink theme)
+      g.lineStyle(4, 0x06b6d4, 1);
+      g.strokeRect(2, 2, width - 4, height - 4);
+      // Grid lines on platform
+      g.lineStyle(1, 0xec4899, 0.3);
+      for(let px = 20; px < width; px += 20) {
+        g.beginPath(); g.moveTo(px, 4); g.lineTo(px, height - 4); g.strokePath();
+      }
+      g.generateTexture(key, width, height);
+      g.destroy();
+    }
+    const plat = this.platforms.create(x, y, key);
     plat.body.checkCollision.down = false;
     plat.body.checkCollision.left = false;
     plat.body.checkCollision.right = false;
     
     this.uiCamera.ignore(plat);
+  }
+
+  public spawnParticles(x: number, y: number, color: number, count: number = 10) {
+    if (!this.textures.exists('particle_tex')) {
+      const g = this.add.graphics();
+      g.fillStyle(0xffffff, 1);
+      g.fillRect(0, 0, 4, 4);
+      g.generateTexture('particle_tex', 4, 4);
+      g.destroy();
+    }
+    const emitter = this.add.particles(0, 0, 'particle_tex', {
+      x, y,
+      speed: { min: 20, max: 100 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 1, end: 0 },
+      lifespan: 400,
+      tint: color,
+      blendMode: 'ADD',
+      emitting: false
+    });
+    emitter.explode(count);
+    this.uiCamera.ignore(emitter);
+    // Destroy emitter after particles finish
+    this.time.delayedCall(500, () => emitter.destroy());
   }
 }

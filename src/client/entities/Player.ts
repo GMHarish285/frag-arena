@@ -56,6 +56,9 @@ export class Player {
   private recoilTween: Phaser.Tweens.Tween | null = null;
   public lastFrontHandPosition: Joint | null = null;
 
+  public color: number;
+  public weaponColor: number;
+
   constructor(
     scene: Phaser.Scene,
     x: number,
@@ -63,11 +66,12 @@ export class Player {
     id: string,
     teamId: string,
     color: number,
-    maxHealth: number = 100, // Kept signature for backwards compatibility with ArenaScene
-    maxLives: number = 10
+    weaponColor: number
   ) {
     this.id = id;
     this.teamId = teamId;
+    this.color = color;
+    this.weaponColor = weaponColor;
 
     // USE CONFIG: Health & Lives
     this.maxHealth = GameConfig.player.stats.maxHealth;
@@ -220,8 +224,8 @@ export class Player {
     g.clear();
 
     const currentAlpha = this.isInvisible ? 0.15 : 1;
-    g.lineStyle(4, 0xffffff, currentAlpha);
-    g.fillStyle(0xffffff, currentAlpha);
+    g.lineStyle(4, this.color, currentAlpha);
+    g.fillStyle(this.color, currentAlpha);
 
     const px = this.sprite.x;
     const py = this.sprite.y;
@@ -313,9 +317,13 @@ export class Player {
           if (char !== ' ') {
             if (drawnCount >= pixelsToDraw) break; // pixel by pixel effect
             
-            const color = model.palette[char];
-            if (color !== undefined) {
-               g.fillStyle(color, currentAlpha);
+            let drawColor = model.palette[char];
+            if (char === 'N') {
+               drawColor = this.weaponColor;
+            }
+            
+            if (drawColor !== undefined) {
+               g.fillStyle(drawColor, currentAlpha);
                const baseOffsetX = (x - model.gripOffset.x) * pxSize * directionSign;
                const baseOffsetY = (y - model.gripOffset.y) * pxSize;
                
@@ -329,7 +337,7 @@ export class Player {
                const drawX = frontHandTarget.x + rx - (isRight ? 0 : pxSize);
                const drawY = frontHandTarget.y + ry;
 
-               g.fillStyle(color, currentAlpha);
+               g.fillStyle(drawColor, currentAlpha);
                g.fillRect(drawX, drawY, pxSize, pxSize);
             }
             drawnCount++;
@@ -635,6 +643,7 @@ export class Player {
 
     if (isGrounded && !this.wasGrounded) {
       this.lastLandedTime = currentTime;
+      (this.sprite.scene as any).spawnParticles(this.sprite.x, this.sprite.y + 45, this.color, 15);
     }
     this.wasGrounded = isGrounded;
 
@@ -674,11 +683,19 @@ export class Player {
         this.sprite.setVelocityY(jumpVelocity);
         this.jumpCount++;
         this.lastGroundedTime = 0;
+        (this.sprite.scene as any).spawnParticles(this.sprite.x, this.sprite.y + 45, this.color, 15);
       }
     }
 
     if (this.isKnockedBack) {
       targetVelocityX = 0; // Stunned, natural drag takes over completely
+    }
+
+    // Sprint particles
+    if (isGrounded && Math.abs(currentVelocityX) > 100) {
+      if (Math.random() < 0.2) {
+        (this.sprite.scene as any).spawnParticles(this.sprite.x, this.sprite.y + 45, this.color, 2);
+      }
     }
 
     // Determine acceleration rate based on intent and current speed

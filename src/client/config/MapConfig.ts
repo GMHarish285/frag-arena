@@ -47,4 +47,22 @@ export const MAP_REGISTRY: Record<string, IMapData> = {
       { x: 960, y: 450, width: 500, height: 40, color: 0x666666 }, // High floating bridge
     ],
   },
+  neonClassic: {
+    id: 'neonClassic',
+    name: 'Neon Complex Arena',
+    spawnPoints: {
+      player1: { x: 500, y: 300 },
+      dummy: { x: 1420, y: 300 },
+    },
+    deathY: 1200,
+    platforms: [
+      { x: 960, y: 900, width: 800, height: 40, color: 0x111111 }, // Base floor
+      { x: 400, y: 750, width: 350, height: 40, color: 0x222222 }, // Left lower
+      { x: 1520, y: 750, width: 350, height: 40, color: 0x222222 }, // Right lower
+      { x: 960, y: 600, width: 400, height: 40, color: 0x333333 }, // Center mid
+      { x: 250, y: 500, width: 250, height: 40, color: 0x444444 }, // Far left high
+      { x: 1670, y: 500, width: 250, height: 40, color: 0x444444 }, // Far right high
+      { x: 960, y: 350, width: 200, height: 40, color: 0x555555 }, // Center high peak
+    ],
+  },
 };
